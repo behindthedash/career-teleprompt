@@ -1,0 +1,5 @@
+# hearsay -- worktrail-go policy.
+# See worktrail's src/worktrail/router/policy.py DEFAULTS for the full
+# schema. Every key is optional and defaults to a safe, do-nothing value
+# until this repo opts in explicitly (e.g. pre_pr_cmd for the pre-PR test
+# gate, automerge for GitHub-native auto-merge eligibility).
