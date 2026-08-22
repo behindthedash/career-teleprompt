@@ -1,6 +1,6 @@
 ## Why
 
-Epic [`001-live-interview-copilot`](../../epics/001-live-interview-copilot.md) needs a stable point where finalized `Remote` and `Local` speech can be consumed by retrieval and teleprompter features. Today `HearsayApp._poll_transcripts()` drains each `TranscriptionResult` directly into the markdown writer and live transcript UI, so a new consumer would otherwise have to couple itself to application/UI internals.
+Epic [`001-extension-host-foundation`](../../epics/001-extension-host-foundation.md) needs a stable point where finalized `Remote` and `Local` speech can be consumed by optional downstream applications without coupling those consumers to Hearsay application/UI internals. Today `HearsayApp._poll_transcripts()` drains each `TranscriptionResult` directly into the markdown writer and live transcript UI.
 
 ## What Changes
 
@@ -30,6 +30,6 @@ None. There are no archived OpenSpec capabilities yet; ordinary Hearsay behavior
 
 ## Product-Level Merge Gate
 
-**Epic acceptance step advanced:** `faster-whisper produces source-tagged transcript -> optional product layers can consume finalized Remote/Local speech`.
+**Epic acceptance step advanced:** `faster-whisper produces source-tagged transcript -> optional downstream consumers can receive finalized Remote/Local speech through a generic event seam`.
 
 The change is complete only when an extension subscriber receives ordered source-tagged events during a normal recording test while markdown/live-view behavior remains unchanged and a failing subscriber does not interrupt the session.

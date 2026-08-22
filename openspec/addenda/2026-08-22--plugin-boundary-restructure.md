@@ -4,30 +4,27 @@
 
 ## Decision
 
-Hearsay will remain a reusable transcription host. Interview-specific RAG, knowledge storage, cue generation, and teleprompter behavior will move to a separate consumer project rather than becoming Hearsay core.
+Hearsay will remain a reusable transcription host. Interview-specific RAG, knowledge storage, cue generation, overlay/teleprompter UI infrastructure, and teleprompter behavior will move to a separate consumer project rather than becoming Hearsay core.
 
 ## Host/Consumer Boundary
 
 ### Hearsay owns
-
 - Windows system/microphone audio capture
 - local faster-whisper transcription
 - finalized source-tagged transcript event contract
 - bounded/failure-isolated subscriber delivery
 - generic live-only session output
 - low-latency live transcription profiles and backlog diagnostics
-- optional dependency isolation
-- narrowly reusable topmost-window primitives
+- side-effect-free supported extension import surface
 - upstream contribution discipline
 
 ### Interview Copilot owns
-
 - remote-turn/question detection
 - curated resume/project knowledge indexing
 - local and PostgreSQL/pgvector knowledge-store providers
 - retrieval/reranking and claim-status safeguards
-- interview cue composition
-- interview-specific overlay UX
+- shared topmost-window/geometry infrastructure needed by its own UIs
+- interview cue composition and overlay UX
 - prepared teleprompter content and speech-following alignment
 - coexistence of dynamic cues and prepared material
 - end-to-end interview workflow/session orchestration
@@ -47,17 +44,14 @@ A network webhook/WebSocket/IPC transport is intentionally deferred. It may be a
 ## Change Disposition
 
 ### Remain active in Hearsay
-
 - 001 transcript event extension boundary
 - 012 generic transcript subscriber API
 - 013 generic live-only session mode
-- 014 compact topmost window primitives
-- 015 optional consumer dependency isolation
+- 015 extension host import boundary
 - 016 upstream contribution workflow
 - 017 low-latency live transcription
 
 ### Extract to Interview Copilot
-
 - 003 local knowledge index
 - 004 remote question boundaries
 - 005 interview cue retrieval
@@ -67,15 +61,16 @@ A network webhook/WebSocket/IPC transport is intentionally deferred. It may be a
 - 009 local speech alignment
 - 010 speech-following teleprompter UI
 - 011 cue/teleprompter coexistence
+- 014 compact topmost window primitives
 - 018 knowledge-store provider backends
 
 ### Superseded
-
-- 002 ephemeral copilot session — replaced by generic Hearsay change 013. The consumer should request/use Hearsay's live-only session capability instead of implementing persistence policy itself.
+- 002 ephemeral copilot session — replaced by generic Hearsay change 013.
+- original 015 copilot-dependency-isolation framing — replaced by the stricter host import boundary; consumer dependencies belong entirely in the consumer project.
 
 ## Migration Package
 
-Until `behindthedash/hearsay-interview-copilot` exists, extracted specs are preserved under `openspec/extractions/interview-copilot/`. That directory is not an active Hearsay OpenSpec change registry. Once the companion repository exists, its contents should be transplanted to that repository's root `openspec/` and rewritten where implementation paths still reference Hearsay internals.
+Until `behindthedash/hearsay-interview-copilot` exists, extracted specs are preserved under `openspec/extractions/interview-copilot/`. That directory is not an active Hearsay OpenSpec change registry. Once the companion repository exists, its contents should be transplanted to that repository's root `openspec/` and implementation paths that still reference Hearsay internals should be rewritten against the supported host API.
 
 ## Dependency Direction
 

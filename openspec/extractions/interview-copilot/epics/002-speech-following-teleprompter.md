@@ -10,7 +10,7 @@ This is a consumer feature built on Hearsay's `Local` transcript events. Hearsay
 
 - Hearsay finalized `Local` transcript events through the supported subscriber API
 - Hearsay low-latency live transcription profile
-- optional Hearsay topmost-window primitives where they reduce duplicate Windows/tkinter infrastructure
+- Hearsay side-effect-free extension import surface
 
 ## Architectural Principles
 
@@ -19,7 +19,8 @@ This is a consumer feature built on Hearsay's `Local` transcript events. Hearsay
 3. **Only Local speech advances prepared content.** Interviewer/Remote speech never moves the teleprompter.
 4. **Manual control always wins.** Next/previous/jump can override automatic alignment immediately.
 5. **Dynamic cues and prepared material remain separate models.** They are coordinated only in the presentation layer.
-6. **The user should glance, not read.** UI emphasizes the current point and nearby context rather than a wall of scrolling text.
+6. **UI infrastructure is consumer-owned.** Shared topmost-window and geometry behavior belongs here because both cue and teleprompter UIs use it.
+7. **The user should glance, not read.** UI emphasizes the current point and nearby context rather than a wall of scrolling text.
 
 ## Feature Decomposition
 
@@ -28,6 +29,9 @@ Load Markdown/outlines into stable ordered sections with source provenance and r
 
 ### 009 — Local Speech Alignment
 Consume `Local` transcript events and maintain confidence-based alignment to prepared sections, including hold/recovery behavior.
+
+### 014 — Compact Topmost Window Primitives
+Provide consumer-internal reusable topmost-window, geometry persistence, opacity, and safe background-update behavior shared by cue and teleprompter UIs.
 
 ### 010 — Speech-Following Teleprompter UI
 Render prepared content in a compact topmost camera-adjacent consumer window with manual navigation and safe background updates.
@@ -42,6 +46,7 @@ Coordinate prepared teleprompter presentation with dynamic interview cues withou
 - No fixed-speed scrolling as the primary behavior.
 - No requirement to read a script verbatim.
 - No merging RAG results into the prepared-content source document.
+- No requirement that Hearsay expose a UI toolkit.
 
 ## Acceptance Journey
 
@@ -56,4 +61,4 @@ Coordinate prepared teleprompter presentation with dynamic interview cues withou
 
 ## Dependencies
 
-`008` precedes `009`; `010` consumes both; `011` also depends on the Interview Copilot cue model from Epic 001.
+`008` precedes `009`; `014` provides shared consumer UI infrastructure; `010` consumes `008/009/014`; `011` also depends on the Interview Copilot cue model from Epic 001.

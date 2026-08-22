@@ -13,7 +13,7 @@ This project consumes, but does not own:
 - Hearsay finalized source-tagged transcript subscriber API
 - Hearsay generic live-only session mode
 - Hearsay low-latency transcription profile
-- Hearsay reusable topmost-window primitives where useful
+- Hearsay side-effect-free supported import surface
 
 The MVP integration is explicit in-process handler registration. No webhook/network transport is required.
 
@@ -24,8 +24,9 @@ The MVP integration is explicit in-process handler registration. No webhook/netw
 3. **Truth status is first-class.** Implemented work, prototypes, design ideas, and target-role hypotheticals remain distinguishable throughout indexing, retrieval, and display.
 4. **Personal data stays out of Git.** Real resume/project material and interview transcripts are external user-owned data.
 5. **Knowledge storage is consumer-owned.** Local storage and PostgreSQL/pgvector are backends of the Interview Copilot knowledge layer, not Hearsay capabilities.
-6. **Stale work cannot win.** New interviewer turns supersede older retrieval generations.
-7. **Failure degrades locally.** Retrieval/UI/database failure must not terminate Hearsay transcription.
+6. **Consumer UI infrastructure is consumer-owned.** Shared topmost-window/geometry helpers live with the cue and teleprompter features rather than in Hearsay.
+7. **Stale work cannot win.** New interviewer turns supersede older retrieval generations.
+8. **Failure degrades locally.** Retrieval/UI/database failure must not terminate Hearsay transcription.
 
 ## Feature Decomposition
 
@@ -41,6 +42,9 @@ Consume `Remote` Hearsay transcript events and assemble coherent interviewer tur
 ### 005 — Interview Cue Retrieval
 Retrieve/rerank evidence, preserve truth status, suppress stale generations, and compose compact structured cues.
 
+### 014 — Compact Topmost Window Primitives
+Provide consumer-internal reusable window/geometry/focus-safe update behavior shared by cue and teleprompter UIs.
+
 ### 006 — Interview Cue Overlay
 Present the current structured cue in a compact topmost interview-specific UI without stealing focus.
 
@@ -55,10 +59,11 @@ Own consumer startup/preflight, Hearsay subscription registration, knowledge-pro
 - No automatic retention of interview transcripts by default.
 - No requirement for a cloud embedding/LLM provider.
 - No long-form answer generator in the MVP critical path.
+- No requirement that Hearsay expose consumer UI primitives.
 
 ## Acceptance Journey
 
-1. Interview Copilot starts and registers a handler against a supported Hearsay event API.
+1. Interview Copilot starts and imports/registers against a supported Hearsay event API.
 2. Hearsay emits finalized `Remote` speech from a low-latency live-only session.
 3. The consumer assembles a coherent interviewer turn.
 4. The turn is searched against the selected career/interview knowledge scope.
@@ -70,4 +75,4 @@ Own consumer startup/preflight, Hearsay subscription registration, knowledge-pro
 
 ## Dependencies
 
-`003` and `018` establish knowledge storage/retrieval foundations. `004` depends on the Hearsay subscriber API. `005` depends on `003/018/004`; `006` depends on the cue model; `007` composes the system.
+`003` and `018` establish knowledge storage/retrieval foundations. `004` depends on the Hearsay subscriber API. `005` depends on `003/018/004`; `014` supplies shared consumer UI infrastructure; `006` consumes the cue model and `014`; `007` composes the system.

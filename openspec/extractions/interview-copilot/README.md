@@ -27,7 +27,7 @@ The consumer depends on Hearsay capabilities rather than duplicating them:
 - finalized source-tagged transcript subscriber API
 - generic live-only session mode
 - low-latency transcription profile
-- reusable topmost-window primitives where useful
+- side-effect-free supported Hearsay import surface
 
 The intended runtime shape is:
 
@@ -53,6 +53,9 @@ The first integration should use explicit in-process registration. Network webho
 - 009 local speech alignment
 - 010 speech-following teleprompter UI
 - 011 cue/teleprompter coexistence
+- 014 compact topmost window primitives
 - 018 knowledge-store provider backends
 
 Change 002 is not moved because its responsibility is superseded by Hearsay's generic change 013.
+
+The old Hearsay change 015 is not moved because its copilot-dependency framing is obsolete; the companion project simply owns its own dependency set while Hearsay change 015 guarantees a clean host import surface.

@@ -2,35 +2,35 @@ schema: spec-driven
 
 context: |
   Product: Hearsay fork of parkscloud/Hearsay.
-  Responsibility: reusable Windows transcription host and extension surface. Hearsay owns audio capture, local faster-whisper transcription, source-tagged finalized transcript events, live-only session behavior, low-latency profiles, extension-host lifecycle, reusable desktop primitives, and upstream-ready hardening.
-  Non-responsibility: interview question detection, resume/project RAG, knowledge databases, pgvector schemas, interview cue generation, teleprompter domain behavior, target-company preparation, and other consumer-specific workflows belong outside this repository.
+  Responsibility: reusable Windows transcription host and extension surface. Hearsay owns audio capture, local faster-whisper transcription, source-tagged finalized transcript events, live-only session behavior, low-latency profiles, a side-effect-free extension import surface, and upstream-ready hardening.
+  Non-responsibility: interview question detection, resume/project RAG, knowledge databases, pgvector schemas, interview cue generation, overlay/teleprompter UI infrastructure, teleprompter behavior, target-company preparation, and other consumer-specific workflows belong outside this repository.
   Platform: Windows desktop application, Python 3.11+, customtkinter/pystray UI.
   Audio: WASAPI loopback and microphone capture; faster-whisper runs locally.
   Existing architecture: AudioRecorder -> TranscriptionPipeline -> TranscriptionResult queue -> HearsayApp._poll_transcripts() -> MarkdownWriter + LiveTranscriptWindow.
   Existing privacy invariant: raw audio is never persisted to disk.
   Existing reliability conventions: StoppableThread for background work, safe_after() for tkinter updates, fresh queues per recording session, loud recorder/silence failure reporting.
-  Packaging: PyInstaller + Inno Setup. Core Hearsay must remain runnable without optional extension dependencies.
-  Public repository: never commit personal resume/project content, interview transcripts, secrets, machine-specific paths, database connection strings, or employer-confidential material. Test corpora must be synthetic.
+  Packaging: PyInstaller + Inno Setup. Core Hearsay must remain runnable with only its own dependencies; consumer applications own their dependency sets and packaging.
+  Public repository: never commit personal resume/project content, interview transcripts, secrets, machine-specific paths, database connection strings, or employer-confidential material. Test data must be synthetic.
   Extension direction: expose small generic in-process contracts such as finalized transcript subscribers. Prefer explicit registration and bounded delivery. Network/webhook/IPC transport is a later concern and must not be required by the first host API.
 
 rules:
   proposal:
     - Tie each active change to a Hearsay-owned epic and state the host capability it advances.
-    - Reject domain-specific interview/RAG/knowledge changes from the active Hearsay registry; place them in the separate consumer project.
+    - Reject domain-specific interview/RAG/knowledge/UI changes from the active Hearsay registry; place them in the separate consumer project.
     - Keep one change to one independently testable feature.
   specs:
     - Describe observable behavior, privacy, latency, compatibility, and failure behavior; keep class/library choices in design.md.
     - Every requirement must include at least one #### Scenario using WHEN/THEN.
     - Preserve ordinary Hearsay transcription behavior unless a requirement explicitly changes it.
-    - Include Windows behavior when UI, audio devices, paths, process focus, or packaging are involved.
+    - Include Windows behavior when audio devices, paths, process lifecycle, or packaging are involved.
     - Public transcript-event contracts must remain free of interview intent, RAG, corpus, cue, or personal-knowledge fields.
   design:
     - Reuse existing Hearsay queues, source labels, TranscriptionResult, threading helpers, and configuration conventions before adding abstractions.
     - Optional consumers must be bounded and unable to block audio capture/transcription.
+    - Importing the supported extension API must not launch the tray UI, start audio capture, or import downstream consumer packages.
     - Prefer explicit in-process subscriber registration for the first extension API; do not add a plugin marketplace or network transport without a separate justified change.
-    - Keep optional dependencies outside the base startup/import path.
     - Design generic changes so they can be proposed upstream independently of any consumer project.
   tasks:
-    - Include unit/regression tests and a Windows/manual acceptance step for changes that touch audio, UI, threading, or packaging.
+    - Include unit/regression tests and a Windows/manual acceptance step for changes that touch audio, threading, process lifecycle, or packaging.
     - Keep tasks small enough for one implementation session and identify concrete files when known.
     - Never use real personal resume/interview data in committed tests or fixtures.
