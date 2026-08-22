@@ -1,0 +1,26 @@
+schema: spec-driven
+
+context: |
+  Planned product: Hearsay Interview Copilot, a separate consumer of the Hearsay transcription host.
+  Dependency direction: Interview Copilot depends on Hearsay; Hearsay must not depend on Interview Copilot.
+  Host capabilities expected from Hearsay: finalized source-tagged transcript subscriber API, live-only session mode, low-latency transcription profiles, and optional reusable topmost-window primitives.
+  Consumer responsibilities: interviewer turn/question detection, curated career/project knowledge indexing, retrieval and cue composition, local/pgvector knowledge storage, interview overlay, prepared teleprompter content, speech-following alignment, and interview workflow orchestration.
+  Privacy: no real resume, personal project corpus, interview transcript, credentials, or target-company confidential information is committed to the public repository. Synthetic fixtures only.
+  Initial integration: explicit in-process transcript-handler registration. Do not require webhooks/WebSockets/IPC for MVP.
+
+rules:
+  proposal:
+    - Do not reimplement Hearsay host responsibilities such as audio capture or transcription.
+    - State which Hearsay host capability the change consumes.
+  specs:
+    - Preserve provenance and experience-status semantics so hypothetical material cannot masquerade as implemented work.
+    - Define latency/failure behavior for live interview features.
+    - Every requirement includes WHEN/THEN scenarios.
+  design:
+    - Treat Hearsay transcript events as the input boundary; do not reach into Hearsay UI or Whisper internals.
+    - Keep knowledge-store interfaces provider-neutral; local and pgvector are persistence/search implementations.
+    - Keep personal corpus content outside the repository.
+    - Prefer retrieval and compact cues over generated long-form scripts in the MVP.
+  tasks:
+    - Use synthetic corpora/transcripts for committed tests.
+    - Include end-to-end integration tests against the supported Hearsay event API.
