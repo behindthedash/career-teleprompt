@@ -1,6 +1,6 @@
 ## Why
 
-With coherent interviewer queries (004) and a truthful local knowledge index (003), Epic [`001-live-interview-copilot`](../../../docs/specs/epics/001-live-interview-copilot.md) needs the decision layer that selects the best evidence and turns it into glanceable cues. The MVP should prove retrieval quality and provenance before adding a generative answer model.
+With coherent interviewer queries (004) and a truthful local knowledge index (003), Epic [`001-live-interview-copilot`](../../epics/001-live-interview-copilot.md) needs the decision layer that selects the best evidence and turns it into glanceable cues. The MVP should prove retrieval quality and provenance before adding a generative answer model.
 
 ## What Changes
 
