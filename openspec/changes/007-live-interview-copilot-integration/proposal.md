@@ -1,6 +1,6 @@
 ## Why
 
-Changes 001–006 define the event, privacy, knowledge, query, retrieval, and cue-view pieces independently. Epic [`001-live-interview-copilot`](../../../docs/specs/epics/001-live-interview-copilot.md) still needs one supported user workflow that starts those pieces together, verifies prerequisites before an interview, manages failures/stale work, and tears them down without changing ordinary Hearsay recording.
+Changes 001–006 define the event, privacy, knowledge, query, retrieval, and cue-view pieces independently. Epic [`001-live-interview-copilot`](../../epics/001-live-interview-copilot.md) still needs one supported user workflow that starts those pieces together, verifies prerequisites before an interview, manages failures/stale work, and tears them down without changing ordinary Hearsay recording.
 
 ## What Changes
 

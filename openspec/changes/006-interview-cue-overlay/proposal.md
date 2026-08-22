@@ -1,6 +1,6 @@
 ## Why
 
-Epic [`001-live-interview-copilot`](../../../docs/specs/epics/001-live-interview-copilot.md) is useful only if retrieved evidence can be absorbed without pulling attention away from the interviewer. The existing `LiveTranscriptWindow` is a large transcript viewer and explicitly takes focus when shown; the interview cue needs a separate compact, always-on-top, non-focus-stealing projection near the webcam.
+Epic [`001-live-interview-copilot`](../../epics/001-live-interview-copilot.md) is useful only if retrieved evidence can be absorbed without pulling attention away from the interviewer. The existing `LiveTranscriptWindow` is a large transcript viewer and explicitly takes focus when shown; the interview cue needs a separate compact, always-on-top, non-focus-stealing projection near the webcam.
 
 ## What Changes
 

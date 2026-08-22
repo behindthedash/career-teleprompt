@@ -1,6 +1,6 @@
 ## Why
 
-Epic [`001-live-interview-copilot`](../../../docs/specs/epics/001-live-interview-copilot.md) needs a private, queryable source of truthful resume/project evidence. The corpus is small enough that a server-grade vector database would add packaging and operational complexity before it adds product value, but the retrieval contract should remain swappable later.
+Epic [`001-live-interview-copilot`](../../epics/001-live-interview-copilot.md) needs a private, queryable source of truthful resume/project evidence. The corpus is small enough that a server-grade vector database would add packaging and operational complexity before it adds product value, but the retrieval contract should remain swappable later.
 
 ## What Changes
 

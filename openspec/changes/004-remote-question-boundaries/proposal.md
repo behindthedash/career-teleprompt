@@ -1,6 +1,6 @@
 ## Why
 
-A live interview should not launch semantic retrieval for every Whisper segment. Epic [`001-live-interview-copilot`](../../../docs/specs/epics/001-live-interview-copilot.md) needs a lightweight boundary that assembles finalized Remote events into coherent interviewer intents/questions and emits a bounded query only when enough meaning is available.
+A live interview should not launch semantic retrieval for every Whisper segment. Epic [`001-live-interview-copilot`](../../epics/001-live-interview-copilot.md) needs a lightweight boundary that assembles finalized Remote events into coherent interviewer intents/questions and emits a bounded query only when enough meaning is available.
 
 ## What Changes
 
