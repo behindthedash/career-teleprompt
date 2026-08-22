@@ -1,15 +1,19 @@
-# Feature Specs
+# OpenSpec
 
 This directory is the spec-driven development registry for the Hearsay interview-copilot fork.
 
-The project uses an epic-first roadmap and OpenSpec for implementation changes:
+All OpenSpec planning artifacts live under `docs/openspec/`:
 
-- `docs/specs/epics/` contains durable product/architecture epics.
-- `openspec/changes/<change-id>/proposal.md` captures the intent and scope for an implementation change.
-- `openspec/changes/<change-id>/design.md` captures technical design and tradeoffs when needed.
-- `openspec/changes/<change-id>/tasks.md` captures executable implementation work.
-- `openspec/changes/<change-id>/specs/<capability>/spec.md` contains capability requirements/deltas.
-- Completed changes are archived under `openspec/changes/archive/` after implementation and validation.
+- `docs/openspec/epics/` contains durable product/architecture epics.
+- `docs/openspec/addenda/` contains durable roadmap/architecture amendments discovered during feature expansion.
+- `docs/openspec/changes/<change-id>/proposal.md` captures the intent and scope for an implementation change.
+- `docs/openspec/changes/<change-id>/design.md` captures technical design and tradeoffs when needed.
+- `docs/openspec/changes/<change-id>/tasks.md` captures executable implementation work.
+- `docs/openspec/changes/<change-id>/specs/<capability>/spec.md` contains capability requirements/deltas.
+- Completed changes are archived under `docs/openspec/changes/archive/` after implementation and validation.
+- `docs/openspec/config.yaml` contains project context and artifact rules.
+
+There is intentionally no separate `docs/specs/` registry and no repository-root `openspec/` directory; epics, addenda, configuration, and change artifacts are kept together here.
 
 ## Active roadmap
 
