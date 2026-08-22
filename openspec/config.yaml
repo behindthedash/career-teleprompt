@@ -1,32 +1,39 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Product: Hearsay interview-copilot fork of parkscloud/Hearsay.
+  Platform: Windows desktop application, Python 3.11+, customtkinter/pystray UI.
+  Audio: WASAPI loopback and microphone capture; faster-whisper runs locally.
+  Existing architecture: AudioRecorder -> TranscriptionPipeline -> TranscriptionResult queue -> HearsayApp._poll_transcripts() -> MarkdownWriter + LiveTranscriptWindow.
+  Existing privacy invariant: raw audio is never persisted to disk.
+  Existing reliability conventions: StoppableThread for background work, safe_after() for tkinter updates, fresh queues per recording session, loud recorder/silence failure reporting.
+  Packaging: PyInstaller + Inno Setup. Core Hearsay must remain runnable without interview-copilot dependencies unless the feature is explicitly enabled.
+  Public repository: never commit personal resume/project content, interview transcripts, secrets, machine-specific paths, database connection strings, or employer-confidential material. Test corpora must be synthetic.
+  Product direction: local-first live interview assistance. Remote speech may drive retrieval from a user-owned knowledge corpus; local speech may drive a speech-following teleprompter. Prefer concise provenance-preserving cues over generated scripts.
+  Knowledge direction: Hearsay owns only the storage/retrieval behavior required by its own curated knowledge features. Local/offline storage remains supported and is the no-server default. An explicitly configured private PostgreSQL + pgvector backend may be used as an alternative Hearsay knowledge-store provider. This repository does not define a generalized personal knowledge-base platform for unrelated applications or personal-data domains.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
-
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+rules:
+  proposal:
+    - Tie each change to the relevant epic and state the acceptance-journey step it advances.
+    - Keep one change to one independently testable feature; do not smuggle later-epic work into an earlier change.
+    - For knowledge changes, distinguish local/offline requirements from optional remote-provider behavior and keep ownership scoped to Hearsay.
+  specs:
+    - Describe observable behavior, privacy, latency, compatibility, and failure behavior; keep class/library choices in design.md.
+    - Every requirement must include at least one #### Scenario using WHEN/THEN.
+    - Preserve ordinary Hearsay transcription behavior unless a requirement explicitly changes it.
+    - Include Windows behavior when UI, audio devices, paths, process focus, or packaging are involved.
+    - Remote Hearsay knowledge providers must define retrieval-scope isolation, secret handling, TLS/transport expectations, and degraded behavior.
+    - Do not add generalized personal-KB requirements or unrelated personal-data domain semantics to Hearsay specs for speculative future reuse.
+  design:
+    - Reuse existing Hearsay queues, source labels, TranscriptionResult, threading helpers, and configuration conventions before adding abstractions.
+    - Keep interview-specific dependencies and personal-data concerns outside the core transcription path.
+    - Any background consumer must be bounded and unable to block audio capture/transcription.
+    - Hearsay knowledge retrieval should consume a provider-neutral store contract; do not couple ranking/cue logic directly to PostgreSQL, pgvector, SQLite, or NumPy.
+    - A future standalone/shared personal KB is an extraction decision, not a responsibility of this repository.
+    - Credentials and personal corpus content must never be committed or written into normal logs/transcripts.
+    - Record unresolved choices only when they truly require product input; otherwise make and justify a concrete decision.
+  tasks:
+    - Include unit/regression tests and a Windows/manual acceptance step for changes that touch audio, UI, threading, or packaging.
+    - Include provider-conformance/integration tests for changes that add a Hearsay knowledge-store backend.
+    - Keep tasks small enough for one implementation session and identify concrete files when known.
+    - Never use real personal resume/interview data in committed tests or fixtures.
