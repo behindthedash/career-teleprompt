@@ -1,6 +1,6 @@
 ## Why
 
-Epic [`001-live-interview-copilot`](../../../docs/specs/epics/001-live-interview-copilot.md) needs a stable point where finalized `Remote` and `Local` speech can be consumed by retrieval and teleprompter features. Today `HearsayApp._poll_transcripts()` drains each `TranscriptionResult` directly into the markdown writer and live transcript UI, so a new consumer would otherwise have to couple itself to application/UI internals.
+Epic [`001-live-interview-copilot`](../../epics/001-live-interview-copilot.md) needs a stable point where finalized `Remote` and `Local` speech can be consumed by retrieval and teleprompter features. Today `HearsayApp._poll_transcripts()` drains each `TranscriptionResult` directly into the markdown writer and live transcript UI, so a new consumer would otherwise have to couple itself to application/UI internals.
 
 ## What Changes
 
