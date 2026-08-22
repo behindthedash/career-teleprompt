@@ -1,6 +1,6 @@
 ## Why
 
-Epic [`001-live-interview-copilot`](../../../docs/specs/epics/001-live-interview-copilot.md) requires a privacy-preserving session in which live speech can drive cues without leaving an interview transcript on disk. Hearsay already avoids raw-audio persistence, but every normal recording currently constructs a `MarkdownWriter` and finalizes a transcript file.
+Epic [`001-live-interview-copilot`](../../epics/001-live-interview-copilot.md) requires a privacy-preserving session in which live speech can drive cues without leaving an interview transcript on disk. Hearsay already avoids raw-audio persistence, but every normal recording currently constructs a `MarkdownWriter` and finalizes a transcript file.
 
 ## What Changes
 
