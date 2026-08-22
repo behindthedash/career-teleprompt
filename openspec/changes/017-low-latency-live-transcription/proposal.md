@@ -1,6 +1,6 @@
 ## Why
 
-Epic [`001-live-interview-copilot`](../../../docs/specs/epics/001-live-interview-copilot.md) assumes cues arrive while the question is still actionable, but upstream Hearsay currently cuts audio only every `CHUNK_DURATION_S = 30` seconds and its live UI warns of roughly 30–60 seconds of delay. A RAG/cue pipeline built on that cadence would often surface guidance after the candidate had already answered.
+Epic [`001-live-interview-copilot`](../../epics/001-live-interview-copilot.md) assumes cues arrive while the question is still actionable, but upstream Hearsay currently cuts audio only every `CHUNK_DURATION_S = 30` seconds and its live UI warns of roughly 30–60 seconds of delay. A RAG/cue pipeline built on that cadence would often surface guidance after the candidate had already answered.
 
 ## What Changes
 
