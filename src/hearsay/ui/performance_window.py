@@ -140,7 +140,9 @@ class PerformanceDiagnosticsWindow(ctk.CTkToplevel):
                 else ""
             )
             runtime_ready = gpu_runtime_status().installed
-            runtime_text = "GPU support installed" if runtime_ready else "GPU support setup may be required"
+            runtime_text = (
+                "GPU support installed" if runtime_ready else "GPU support setup may be required"
+            )
             gpu_frame, self._gpu_button = self._build_config_card(
                 config_frame,
                 column=1,
@@ -488,7 +490,9 @@ class PerformanceDiagnosticsWindow(ctk.CTkToplevel):
     def _close(self) -> None:
         if self._gpu_install_active:
             self._close_when_finished = True
-            self._status_label.configure(text="Cancelling GPU support installation before closing...")
+            self._status_label.configure(
+                text="Cancelling GPU support installation before closing..."
+            )
             self._stop_button.configure(state="disabled")
             self._gpu_install_stop.set()
             return
