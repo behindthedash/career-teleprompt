@@ -27,32 +27,30 @@ jobs:
           git -C /tmp/nexq checkout 1ce1524c122df509f231c521a07ada95bfde2d88
           test "$(git -C /tmp/nexq rev-parse HEAD)" = "1ce1524c122df509f231c521a07ada95bfde2d88"
 
-      - name: Replace runtime foundation while preserving Career Teleprompt planning
+      - name: Replace runtime foundation while preserving Career Teleprompt governance
         shell: bash
         run: |
           set -euo pipefail
           find . -mindepth 1 -maxdepth 1 \
             ! -name .git \
+            ! -name .github \
+            ! -name .worktrail \
             ! -name openspec \
             ! -name docs \
+            ! -name AGENTS.md \
+            ! -name CLAUDE.md \
             -exec rm -rf {} +
 
           rsync -a /tmp/nexq/ ./ \
             --exclude .git \
+            --exclude .github \
             --exclude .planning \
             --exclude .playwright-mcp \
             --exclude website \
-            --exclude .github/workflows/deploy-website.yml \
-            --exclude .github/workflows/release.yml
-
-          # Career Teleprompt develops against dev; upstream NexQ targets main.
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('.github/workflows/ci.yml')
-          text = p.read_text()
-          text = text.replace('branches: [main]', 'branches: [dev]')
-          p.write_text(text)
-          PY
+            --exclude .worktrail \
+            --exclude openspec \
+            --exclude AGENTS.md \
+            --exclude CLAUDE.md
 
           cat > docs/FOUNDATION_MIGRATION.md <<'EOF'
           # Foundation migration
@@ -61,16 +59,17 @@ jobs:
           `1ce1524c122df509f231c521a07ada95bfde2d88`.
 
           The pre-pivot Python Hearsay implementation remains recoverable in Git history.
-          OpenSpec artifacts and Career Teleprompt migration documentation are retained across
-          the foundation replacement.
+          Career Teleprompt repository governance (`.github`, `.worktrail`, `AGENTS.md`,
+          `CLAUDE.md`), OpenSpec artifacts, and migration documentation are retained across
+          the runtime replacement.
 
           Upstream deployment/release workflows, internal planning artifacts, Playwright captures,
-          and the NexQ marketing website are intentionally not imported. Career Teleprompt will
-          define its own release and branding flow after the runtime foundation is validated.
+          and the NexQ marketing website are intentionally not imported. Career Teleprompt defines
+          its own CI, release, and branding policy.
 
           The importer validates the platform-independent frontend before committing the tree.
-          Windows-native Rust validation is intentionally delegated to the imported NexQ CI on
-          `windows-latest`, matching the application's supported platform and upstream CI contract.
+          Windows-native Rust validation is performed by Career Teleprompt CI on `windows-latest`,
+          matching the application's supported platform and NexQ's upstream CI contract.
           EOF
 
       - name: Setup Node
