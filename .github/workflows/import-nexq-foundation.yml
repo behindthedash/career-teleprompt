@@ -1,11 +1,9 @@
 name: Import pinned NexQ foundation
 
 on:
-  push:
-    branches:
-      - foundation/import-nexq
-    paths:
-      - .github/workflows/import-nexq-foundation.yml
+  pull_request:
+    branches: [dev]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
@@ -15,18 +13,21 @@ jobs:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Career Teleprompt
+      - name: Checkout Career Teleprompt PR branch
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Checkout pinned NexQ baseline
         run: |
+          set -euo pipefail
           git clone https://github.com/naxhq/NexQ.git /tmp/nexq
           git -C /tmp/nexq checkout 1ce1524c122df509f231c521a07ada95bfde2d88
           test "$(git -C /tmp/nexq rev-parse HEAD)" = "1ce1524c122df509f231c521a07ada95bfde2d88"
 
-      - name: Preserve migration artifacts and replace runtime foundation
+      - name: Replace runtime foundation while preserving Career Teleprompt planning
         shell: bash
         run: |
           set -euo pipefail
@@ -63,12 +64,21 @@ jobs:
           OpenSpec artifacts and Career Teleprompt migration documentation are retained across
           the foundation replacement.
 
-          Upstream deployment/release workflows and the NexQ marketing website are intentionally
-          not imported. Career Teleprompt will define its own release/branding flow after the
-          runtime foundation is validated.
+          Upstream deployment/release workflows, internal planning artifacts, Playwright captures,
+          and the NexQ marketing website are intentionally not imported. Career Teleprompt will
+          define its own release and branding flow after the runtime foundation is validated.
           EOF
 
-      - name: Install frontend dependencies
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
         run: npm ci
 
       - name: TypeScript check
@@ -77,7 +87,7 @@ jobs:
       - name: Frontend production build
         run: npm run build
 
-      - name: Rust check (Linux foundation sanity)
+      - name: Rust check (Linux sanity)
         run: cargo check
         working-directory: src-tauri
 
@@ -89,4 +99,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "feat: import pinned NexQ application foundation"
-          git push origin HEAD:foundation/import-nexq
+          git push origin HEAD:${{ github.head_ref }}
