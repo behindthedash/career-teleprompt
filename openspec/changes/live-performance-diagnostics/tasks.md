@@ -25,4 +25,4 @@
 - [x] 5.1 Add synthetic unit tests for aggregation, classification, progress, hardware availability, privacy, and failure cases.
 - [x] 5.2 Run Ruff lint, Ruff format-check, and pytest on Python 3.11 and 3.14 in CI. (CI run #51 passed both matrix legs.)
 - [x] 5.3 Build the Windows installer and verify the diagnostics workflow is reachable and usable from the packaged application without Git, Python, PowerShell, or repository access. (CI run #51 built the frozen application, passed the packaged diagnostics smoke, and produced `HearsaySetup.exe` with Inno Setup.)
-- [ ] 5.4 Run representative several-minute CPU and NVIDIA GPU tests through the packaged diagnostics UI and record the content-free summaries, satisfying low-latency validation task 4.3.
+- [x] 5.4 Run representative several-minute CPU and NVIDIA GPU tests through the packaged diagnostics UI and record the content-free summaries, satisfying low-latency validation task 4.3. (CPU: Hearsay 1.1.7, 3.41 min, aggregate RTF 0.92x, Marginal. GPU: Hearsay 1.1.9 on RTX 4060 Laptop GPU 8 GB, 3.65 min, aggregate RTF 0.24x, 100% healthy, Suitable.)
