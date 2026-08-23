@@ -175,9 +175,7 @@ class DiagnosticRunner:
             engine.load()
         except Exception as exc:
             log.error("Diagnostic model load failed", exc_info=True)
-            self._finish_failure(
-                f"Could not load {self.inference.label} configuration: {exc}"
-            )
+            self._finish_failure(f"Could not load {self.inference.label} configuration: {exc}")
             return
 
         if self._stop_requested.is_set():
