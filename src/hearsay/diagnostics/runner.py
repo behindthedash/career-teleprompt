@@ -78,9 +78,12 @@ class DiagnosticRunner:
         recorder_factory: Callable[..., Any] = ProfiledAudioRecorder,
         gpu_preflight: Callable[..., GPUPreflightResult] = run_gpu_preflight,
         model_preparer: Callable[..., Any] = ensure_model_materialized,
+        pipeline_stop_timeout_s: float = DIAGNOSTIC_PIPELINE_STOP_TIMEOUT_S,
     ) -> None:
         if required_sample_s <= 0:
             raise ValueError("required_sample_s must be greater than zero")
+        if pipeline_stop_timeout_s <= 0:
+            raise ValueError("pipeline_stop_timeout_s must be greater than zero")
 
         self._app_config = app_config
         self.source = source
@@ -94,6 +97,7 @@ class DiagnosticRunner:
         self._recorder_factory = recorder_factory
         self._gpu_preflight = gpu_preflight
         self._model_preparer = model_preparer
+        self._pipeline_stop_timeout_s = pipeline_stop_timeout_s
 
         self._state = DiagnosticRunnerState.IDLE
         self._state_lock = threading.Lock()
@@ -346,18 +350,15 @@ class DiagnosticRunner:
 
             if pipeline is not None:
                 pipeline.stop()
-                pipeline.join(timeout=DIAGNOSTIC_PIPELINE_STOP_TIMEOUT_S)
+                pipeline.join(timeout=self._pipeline_stop_timeout_s)
                 if pipeline.is_alive():
                     self._restart_required = True
                     self._failure_message = (
-                        "Transcription inference did not stop within 10 seconds. "
-                        "The diagnostics window recovered, but restart Hearsay before "
-                        "running another test."
+                        "Transcription inference did not stop within "
+                        f"{self._pipeline_stop_timeout_s:g} seconds. The diagnostics window "
+                        "recovered, but restart Hearsay before running another test."
                     )
         finally:
-            # Never tear down a native model object while a wedged worker may
-            # still be executing against it. The daemon worker is abandoned and
-            # the UI requires an app restart before any further diagnostic run.
             if engine is not None and not self._restart_required:
                 try:
                     engine.unload()
