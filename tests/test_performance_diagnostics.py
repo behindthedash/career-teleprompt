@@ -164,9 +164,7 @@ def test_suitability_rules_cover_suitable_marginal_and_unsuitable() -> None:
 
 def test_sustained_backlog_is_unsuitable_even_with_many_healthy_windows() -> None:
     observations = [_observation(i) for i in range(19)]
-    observations.append(
-        _observation(19, elapsed=4.4, rtf=1.1, queue_depth=4, health="behind")
-    )
+    observations.append(_observation(19, elapsed=4.4, rtf=1.1, queue_depth=4, health="behind"))
     aggregate = aggregate_observations(observations, required_sample_s=4.0)
 
     assert aggregate.healthy_percent == 95.0
