@@ -56,6 +56,7 @@ def test_cuda_library_failure_is_actionable() -> None:
     assert "CUDA inference is not ready" in message
     assert "cuBLAS for CUDA 12" in message
     assert "cuDNN 9" in message
+    assert "Install GPU Support" in message
     assert "cublas64_12.dll" in message
 
 

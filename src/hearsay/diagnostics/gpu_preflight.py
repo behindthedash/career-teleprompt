@@ -119,9 +119,9 @@ def _describe_failure(detail: str) -> str:
     if any(marker in lowered for marker in runtime_markers):
         message = (
             "NVIDIA GPU detected, but CUDA inference is not ready. "
-            "faster-whisper on Windows requires NVIDIA cuBLAS for CUDA 12 "
-            "and cuDNN 9. Install those NVIDIA runtime libraries, restart Hearsay, "
-            "and run the GPU test again."
+            "faster-whisper on Windows requires NVIDIA cuBLAS for CUDA 12 and cuDNN 9. "
+            "Use Install GPU Support in this window to let Hearsay download and configure "
+            "the required NVIDIA runtime, then run the GPU test again."
         )
         if detail:
             message += f" Runtime detail: {detail}"

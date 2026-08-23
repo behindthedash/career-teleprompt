@@ -15,9 +15,17 @@ from hearsay.constants import (
     AUDIO_SOURCE_BOTH,
     AUDIO_SOURCE_MIC,
     AUDIO_SOURCE_SYSTEM,
+    DEFAULT_CPU_COMPUTE,
+    DEFAULT_CPU_MODEL,
     MODEL_TABLE,
 )
 from hearsay.transcription.gpu_detect import GPUInfo, detect_gpu
+from hearsay.transcription.gpu_runtime import (
+    GPU_RUNTIME_DOWNLOAD_ESTIMATE_GB,
+    GPUInstallProgress,
+    gpu_runtime_status,
+    install_gpu_runtime,
+)
 from hearsay.transcription.model_manager import download_model
 from hearsay.ui.window_icon import apply_window_icon
 
@@ -31,7 +39,7 @@ class SetupWizard(ctk.CTkToplevel):
         1. Welcome + GPU detection
         2. Audio source selection
         3. Output directory
-        4. Model download
+        4. Optional GPU runtime + model download
         5. Complete
     """
 
@@ -53,12 +61,11 @@ class SetupWizard(ctk.CTkToplevel):
         self._on_complete = on_complete
         self._gpu_info: GPUInfo | None = None
         self._current_screen = 0
+        self._gpu_setup_fell_back = False
 
-        # Container for screens
         self._container = ctk.CTkFrame(self)
         self._container.pack(fill="both", expand=True, padx=20, pady=20)
 
-        # Navigation buttons
         self._nav_frame = ctk.CTkFrame(self)
         self._nav_frame.pack(fill="x", padx=20, pady=(0, 20))
 
@@ -124,7 +131,6 @@ class SetupWizard(ctk.CTkToplevel):
             text_color="gray",
         ).pack(pady=(0, 20))
 
-        # GPU detection
         self._gpu_label = ctk.CTkLabel(
             self._container,
             text="Detecting hardware...",
@@ -137,10 +143,11 @@ class SetupWizard(ctk.CTkToplevel):
             text="",
             font=("Segoe UI", 12),
             text_color="#4da6ff",
+            wraplength=500,
+            justify="center",
         )
         self._rec_label.pack(pady=5)
 
-        # Run detection in background
         threading.Thread(target=self._detect_gpu_bg, daemon=True).start()
 
     def _detect_gpu_bg(self) -> None:
@@ -148,11 +155,16 @@ class SetupWizard(ctk.CTkToplevel):
         info = self._gpu_info
         if info.cuda_available:
             hw_text = f"GPU detected: {info.gpu_name} ({info.vram_gb} GB VRAM)"
+            rec_text = f"Recommended: {info.recommended_model} ({info.recommended_compute})"
+            if not gpu_runtime_status().installed:
+                rec_text += (
+                    f"\nGPU acceleration needs a one-time ~{GPU_RUNTIME_DOWNLOAD_ESTIMATE_GB:g} GB "
+                    "NVIDIA runtime download during setup."
+                )
         else:
             hw_text = "No NVIDIA GPU detected. Will use CPU transcription."
-        rec_text = f"Recommended: {info.recommended_model} ({info.recommended_compute})"
+            rec_text = f"Recommended: {info.recommended_model} ({info.recommended_compute})"
 
-        # Apply to config
         self._config.model_name = info.recommended_model
         self._config.compute_type = info.recommended_compute
         self._config.device = info.recommended_device
@@ -207,7 +219,6 @@ class SetupWizard(ctk.CTkToplevel):
                 text_color="gray",
             ).pack(anchor="w", padx=35, pady=(0, 5))
 
-        # Optional explicit device selection (blank = system default).
         self._add_device_picker("Microphone", list_input_devices, "mic_device_name")
         self._add_device_picker(
             "System audio device", list_loopback_devices, "loopback_device_name"
@@ -216,11 +227,7 @@ class SetupWizard(ctk.CTkToplevel):
     _AUTO_DEVICE = "Automatic (system default)"
 
     def _add_device_picker(self, title: str, list_fn, config_attr: str) -> None:
-        """Add a device dropdown that writes the chosen name to config on change.
-
-        Writes immediately (not on Finish) because navigating screens clears
-        the container and destroys the widget/variable.
-        """
+        """Add a device dropdown that writes the chosen name to config on change."""
         ctk.CTkLabel(
             self._container,
             text=title,
@@ -291,14 +298,14 @@ class SetupWizard(ctk.CTkToplevel):
             self._dir_var.set(path)
             self._config.output_dir = path
 
-    # ── Screen 4: Model Download ──
+    # ── Screen 4: Runtime + Model Download ──
 
     def _screen_model_download(self) -> None:
         self._next_btn.configure(text="Next", state="disabled")
 
         ctk.CTkLabel(
             self._container,
-            text="Download Model",
+            text="Prepare Transcription",
             font=("Segoe UI", 18, "bold"),
         ).pack(pady=(10, 5))
 
@@ -313,9 +320,11 @@ class SetupWizard(ctk.CTkToplevel):
 
         self._dl_status = ctk.CTkLabel(
             self._container,
-            text="Starting download...",
+            text="Preparing...",
             font=("Segoe UI", 12),
             text_color="gray",
+            wraplength=500,
+            justify="center",
         )
         self._dl_status.pack(pady=10)
 
@@ -331,6 +340,24 @@ class SetupWizard(ctk.CTkToplevel):
         def update_status(text: str) -> None:
             self.after(0, lambda: self._dl_status.configure(text=text))
 
+        if self._config.device == "cuda" and not gpu_runtime_status().installed:
+            try:
+                self.after(0, self._begin_gpu_runtime_progress)
+                install_gpu_runtime(progress_callback=self._on_gpu_runtime_progress)
+            except Exception as exc:
+                log.warning("Optional GPU support setup failed; falling back to CPU", exc_info=True)
+                self._gpu_setup_fell_back = True
+                self._config.model_name = DEFAULT_CPU_MODEL
+                self._config.compute_type = DEFAULT_CPU_COMPUTE
+                self._config.device = "cpu"
+                update_status(
+                    "GPU support could not be prepared, so setup is continuing with CPU "
+                    f"transcription. You can retry GPU support later in Settings. Detail: {exc}"
+                )
+            else:
+                update_status("NVIDIA GPU support installed. Preparing transcription model...")
+
+        self.after(0, self._begin_model_progress)
         try:
             download_model(self._config.model_name, progress_callback=update_status)
             self.after(0, self._download_complete)
@@ -345,11 +372,44 @@ class SetupWizard(ctk.CTkToplevel):
             )
             self.after(0, lambda: self._next_btn.configure(state="normal"))
 
+    def _begin_gpu_runtime_progress(self) -> None:
+        self._dl_progress.stop()
+        self._dl_progress.configure(mode="determinate")
+        self._dl_progress.set(0)
+        self._dl_status.configure(
+            text=(
+                f"Installing optional NVIDIA GPU support (~{GPU_RUNTIME_DOWNLOAD_ESTIMATE_GB:g} GB download)..."
+            )
+        )
+
+    def _on_gpu_runtime_progress(self, progress: GPUInstallProgress) -> None:
+        self.after(0, lambda: self._apply_gpu_runtime_progress(progress))
+
+    def _apply_gpu_runtime_progress(self, progress: GPUInstallProgress) -> None:
+        if progress.fraction is not None:
+            self._dl_progress.set(progress.fraction)
+        self._dl_status.configure(text=progress.message)
+
+    def _begin_model_progress(self) -> None:
+        self._dl_progress.stop()
+        self._dl_progress.set(0)
+        self._dl_progress.configure(mode="indeterminate")
+        self._dl_progress.start()
+        model = self._config.model_name
+        info = MODEL_TABLE.get(model, ("?", 0, False))
+        self._dl_status.configure(text=f"Preparing model {model} ({info[0]} parameters)...")
+
     def _download_complete(self) -> None:
         self._dl_progress.stop()
         self._dl_progress.set(1)
         self._dl_progress.configure(mode="determinate")
-        self._dl_status.configure(text="Model downloaded successfully!", text_color="#4da6ff")
+        if self._gpu_setup_fell_back:
+            text = (
+                "CPU model downloaded successfully. GPU support can be retried later in Settings."
+            )
+        else:
+            text = "Transcription components are ready!"
+        self._dl_status.configure(text=text, text_color="#4da6ff")
         self._next_btn.configure(state="normal")
 
     # ── Screen 5: Complete ──
@@ -391,7 +451,6 @@ class SetupWizard(ctk.CTkToplevel):
         ).pack(pady=15)
 
     def _finish(self) -> None:
-        # Save config
         self._config.output_dir = getattr(
             self, "_dir_var", ctk.StringVar(value=self._config.output_dir)
         ).get()

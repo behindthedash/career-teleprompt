@@ -10,6 +10,7 @@ def _diagnostics_packaging_smoke() -> None:
     from hearsay.diagnostics.gpu_preflight import build_gpu_preflight_command
     from hearsay.diagnostics.performance import detect_hardware_availability
     from hearsay.diagnostics.runner import DiagnosticRunner
+    from hearsay.transcription.gpu_runtime import RUNTIME_PACKAGES, gpu_runtime_status
     from hearsay.ui.performance_window import PerformanceDiagnosticsWindow
     from hearsay.ui.settings_window import SettingsWindow
 
@@ -23,10 +24,19 @@ def _diagnostics_packaging_smoke() -> None:
     command = build_gpu_preflight_command("turbo", "float16", frozen=True)
     if "--gpu-preflight" not in command:
         raise RuntimeError("GPU diagnostics preflight entry point is missing")
+    if len(RUNTIME_PACKAGES) != 2 or gpu_runtime_status().bin_dir.name != "bin":
+        raise RuntimeError("Optional GPU runtime installer is missing from the package")
 
 
 def _gpu_inference_preflight(model_name: str, compute_type: str) -> None:
     """Exercise one real CUDA inference for the parent diagnostics process."""
+    # Activate Hearsay's optional app-local CUDA/cuDNN DLL directory before
+    # faster-whisper/CTranslate2 is imported. A compatible system-wide runtime
+    # can still be used when the Hearsay-managed runtime is not installed.
+    from hearsay.transcription.gpu_runtime import activate_gpu_runtime
+
+    activate_gpu_runtime()
+
     import numpy as np
     from faster_whisper import WhisperModel
 
