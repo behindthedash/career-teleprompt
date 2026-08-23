@@ -264,7 +264,9 @@ def _resolve_windows_wheel(
             url = str(item.get("url", ""))
             parsed = urlparse(url)
             if parsed.scheme != "https" or parsed.hostname != "files.pythonhosted.org":
-                raise RuntimeError(f"Unexpected download host for {package.project}: {parsed.hostname}")
+                raise RuntimeError(
+                    f"Unexpected download host for {package.project}: {parsed.hostname}"
+                )
             return {
                 "filename": filename,
                 "url": url,
@@ -348,7 +350,9 @@ def _extract_runtime_payload(
                             break
                         output.write(chunk)
                 dll_count += 1
-            elif ".dist-info/licenses/" in lowered or lowered.endswith(("/license", "/license.txt")):
+            elif ".dist-info/licenses/" in lowered or lowered.endswith(
+                ("/license", "/license.txt")
+            ):
                 destination = licenses_dir / package.project / Path(normalized).name
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 with archive.open(item) as source, destination.open("wb") as output:
