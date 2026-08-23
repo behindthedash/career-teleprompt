@@ -16,6 +16,7 @@ from hearsay.constants import APP_NAME, LIVE_VIEW_POLL_MS, SOURCE_LABELS
 from hearsay.events.dispatcher import TranscriptEventDispatcher
 from hearsay.output.formatter import format_timestamp
 from hearsay.output.markdown_writer import MarkdownWriter
+from hearsay.session import SessionOutputMode, create_session_writer
 from hearsay.transcription.engine import TranscriptionEngine
 from hearsay.transcription.pipeline import TranscriptionPipeline
 from hearsay.ui.about_window import AboutWindow
@@ -53,6 +54,7 @@ class HearsayApp:
         self._recording = False
         self._recording_start_time: float | None = None
         self._event_session_id: str | None = None
+        self._session_output_mode = SessionOutputMode.PERSISTED
         self._teardown_thread: threading.Thread | None = None
         # Incremented on every start/stop so a slow model load can detect
         # that its session was cancelled before it starts the recorder.
@@ -106,16 +108,22 @@ class HearsayApp:
         self._config = self._config_manager.config
         log.info("Wizard complete, app ready")
 
-    def _start_recording(self, source: str) -> None:
-        """Start recording from the given source."""
+    def _start_recording(
+        self,
+        source: str,
+        output_mode: SessionOutputMode = SessionOutputMode.PERSISTED,
+    ) -> None:
+        """Start recording from the given source using the requested output policy."""
         if self._recording:
             log.warning("Already recording, ignoring start request")
             return
 
-        log.info("Starting recording (source=%s)", source)
+        output_mode = SessionOutputMode(output_mode)
+        log.info("Starting recording (source=%s, output_mode=%s)", source, output_mode.value)
         self._recording = True
         self._recording_start_time = time.time()
         self._event_session_id = self._event_dispatcher.start_session()
+        self._session_output_mode = output_mode
         event_session_id = self._event_session_id
         self._session_gen += 1
         session_gen = self._session_gen
@@ -127,8 +135,8 @@ class HearsayApp:
         audio_queue = self._audio_queue
         transcript_queue = self._transcript_queue
 
-        # Set up markdown writer
-        self._writer = MarkdownWriter(self._config.output_dir)
+        # Decide persistence before constructing any transcript writer.
+        self._writer = create_session_writer(self._config.output_dir, output_mode)
 
         # Load transcription engine
         self._engine = TranscriptionEngine(
@@ -195,7 +203,10 @@ class HearsayApp:
         if self._tray:
             self._tray.set_recording(True)
         if self._live_view:
-            self._live_view.set_status("Recording...")
+            if self._session_output_mode is SessionOutputMode.LIVE_ONLY:
+                self._live_view.set_status("Recording (live only — Hearsay transcript not saved)")
+            else:
+                self._live_view.set_status("Recording...")
         # Start polling transcript queue
         self._poll_transcripts()
         # Watchdog: catch a recorder that dies without reporting
@@ -265,16 +276,21 @@ class HearsayApp:
         log.info("Stopping recording")
         self._recording = False
         self._session_gen += 1
+        output_mode = self._session_output_mode
 
         # Update tray immediately so the menu is responsive
         if self._tray:
             self._tray.set_recording(False)
 
-        # Update live view status immediately
+        # Update live view status immediately with precise persistence wording.
+        if output_mode is SessionOutputMode.LIVE_ONLY:
+            stop_status = "Stopping (live only — Hearsay transcript not saved)..."
+        else:
+            stop_status = "Saving..."
         safe_after(
             self._root,
             0,
-            lambda: self._live_view.set_status("Saving...") if self._live_view else None,
+            lambda: self._live_view.set_status(stop_status) if self._live_view else None,
         )
 
         # Capture references for the background thread (including the queue —
@@ -294,6 +310,7 @@ class HearsayApp:
         self._writer = None
         self._recording_start_time = None
         self._event_session_id = None
+        self._session_output_mode = SessionOutputMode.PERSISTED
 
         self._teardown_thread = threading.Thread(
             target=self._teardown_recording,
@@ -432,7 +449,7 @@ class HearsayApp:
         return f"[{ts}] {seg['text']}"
 
     def _poll_transcripts(self) -> None:
-        """Poll the transcript queue and update live view + markdown writer."""
+        """Poll the transcript queue and update live view plus enabled outputs."""
         if not self._recording:
             return
 
@@ -442,10 +459,10 @@ class HearsayApp:
                 result = self._transcript_queue.get_nowait()
                 if event_session_id is not None:
                     self._event_dispatcher.publish_result(event_session_id, result)
-                # Write to markdown
+                # Persist only when this session has a writer.
                 if self._writer:
                     self._writer.append(result)
-                # Update live view
+                # Live UI remains independent of transcript persistence.
                 if self._live_view:
                     for seg in result.segments:
                         self._live_view.append_text(self._format_live_line(result, seg))
@@ -513,6 +530,7 @@ class HearsayApp:
             self._writer = None
             self._recording_start_time = None
             self._event_session_id = None
+            self._session_output_mode = SessionOutputMode.PERSISTED
         elif self._teardown_thread is not None:
             self._teardown_thread.join(timeout=30)
             self._teardown_thread = None
