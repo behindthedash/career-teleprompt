@@ -18,9 +18,7 @@ class RecordingDispatcher:
         self.published: list[tuple[str, TranscriptionResult]] = []
         self.ended: list[str | None] = []
 
-    def publish_result(
-        self, session_id: str, result: TranscriptionResult
-    ) -> tuple[object, ...]:
+    def publish_result(self, session_id: str, result: TranscriptionResult) -> tuple[object, ...]:
         self.published.append((session_id, result))
         return ()
 
