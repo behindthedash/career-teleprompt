@@ -1,4 +1,4 @@
-# hearsay -- worktrail-go policy.
+# career-teleprompt -- worktrail-go policy.
 # See worktrail's src/worktrail/router/policy.py DEFAULTS for the full
 # schema. Every key is optional and defaults to a safe, do-nothing value
 # until this repo opts in explicitly (e.g. pre_pr_cmd for the pre-PR test
@@ -9,3 +9,11 @@
 # the Windows CI matrix (windows-latest, py3.11+3.14) is the actual gate for
 # that part, per this repo's own "CI is the required merge gate" convention.
 pre_pr_cmd: "ruff check src tests scripts && ruff format --check src tests scripts"
+
+# Greenfield: most permissive setting available (max_risk is capped at
+# medium in code -- high/critical are never automerge-eligible regardless
+# of policy). target_branches left empty so this only ever applies against
+# the base branch (dev); prd stays human-gated via its own ruleset.
+automerge:
+  enabled: true
+  max_risk: medium
