@@ -483,7 +483,7 @@ class HearsayApp:
                 log.warning("Session ended with no transcript text")
                 if self._tray:
                     self._tray.notify(
-                        "Recording ended with no speech captured. The microphone "
+                        "Recording ended — no speech was captured. The microphone "
                         "or audio source may have been muted, unplugged, or blocked."
                     )
 
