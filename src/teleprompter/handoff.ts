@@ -17,6 +17,15 @@ export interface TeleprompterAIResponse {
   sources?: TeleprompterAIResponseSource[];
 }
 
+export interface PromptableTeleprompterAIResponse extends TeleprompterAIResponse {
+  mode: string;
+}
+
+/** Only completed What to Say answers should take over the interview teleprompter. */
+export function isPromptableAIResponse(response: PromptableTeleprompterAIResponse): boolean {
+  return response.mode === "WhatToSay" && response.content.trim().length > 0;
+}
+
 /**
  * Convert a completed AI answer into ephemeral speech-followable teleprompter content.
  *
