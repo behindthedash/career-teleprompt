@@ -11,6 +11,7 @@ from enum import Enum
 from typing import Any
 
 from hearsay.config import AppConfig
+from hearsay.diagnostics.gpu_preflight import GPUPreflightResult, run_gpu_preflight
 from hearsay.diagnostics.performance import (
     DEFAULT_REQUIRED_SAMPLE_S,
     DiagnosticObservation,
@@ -25,10 +26,13 @@ from hearsay.diagnostics.performance import (
 )
 from hearsay.session import SessionOutputMode, create_session_writer
 from hearsay.transcription.engine import TranscriptionEngine
+from hearsay.transcription.model_manager import ensure_model_materialized
 from hearsay.transcription.profile import LIVE_TRANSCRIPTION_PROFILE, TranscriptionMetrics
 from hearsay.transcription.runtime import ObservedTranscriptionPipeline, ProfiledAudioRecorder
 
 log = logging.getLogger(__name__)
+
+DIAGNOSTIC_PIPELINE_STOP_TIMEOUT_S = 10.0
 
 
 class DiagnosticRunnerState(str, Enum):
@@ -54,12 +58,7 @@ class DiagnosticProgress:
 
 
 class DiagnosticRunner:
-    """Own a live-only diagnostic recorder/transcription lifecycle.
-
-    The runner intentionally does not publish transcript events, create a writer,
-    or expose transcript results. It consumes the same runtime metrics as ordinary
-    live transcription and promptly discards any transcript queue payloads.
-    """
+    """Own a live-only diagnostic recorder/transcription lifecycle."""
 
     output_mode = SessionOutputMode.LIVE_ONLY
     profile = LIVE_TRANSCRIPTION_PROFILE
@@ -77,6 +76,8 @@ class DiagnosticRunner:
         engine_factory: Callable[..., Any] = TranscriptionEngine,
         pipeline_factory: Callable[..., Any] = ObservedTranscriptionPipeline,
         recorder_factory: Callable[..., Any] = ProfiledAudioRecorder,
+        gpu_preflight: Callable[..., GPUPreflightResult] = run_gpu_preflight,
+        model_preparer: Callable[..., Any] = ensure_model_materialized,
     ) -> None:
         if required_sample_s <= 0:
             raise ValueError("required_sample_s must be greater than zero")
@@ -91,6 +92,8 @@ class DiagnosticRunner:
         self._engine_factory = engine_factory
         self._pipeline_factory = pipeline_factory
         self._recorder_factory = recorder_factory
+        self._gpu_preflight = gpu_preflight
+        self._model_preparer = model_preparer
 
         self._state = DiagnosticRunnerState.IDLE
         self._state_lock = threading.Lock()
@@ -105,6 +108,7 @@ class DiagnosticRunner:
         self._cancel_requested = False
         self._failure_message: str | None = None
         self._result: DiagnosticResult | None = None
+        self._restart_required = False
 
     @property
     def state(self) -> DiagnosticRunnerState:
@@ -116,6 +120,11 @@ class DiagnosticRunner:
         return self._result
 
     @property
+    def restart_required(self) -> bool:
+        """Whether a stuck native worker makes another test unsafe in this process."""
+        return self._restart_required
+
+    @property
     def is_active(self) -> bool:
         return self.state in {
             DiagnosticRunnerState.LOADING,
@@ -124,14 +133,12 @@ class DiagnosticRunner:
         }
 
     def start(self) -> None:
-        """Begin model loading and then start the live diagnostic session."""
+        """Begin model validation/loading and then start the live diagnostic session."""
         with self._state_lock:
             if self._state is not DiagnosticRunnerState.IDLE:
                 raise RuntimeError("diagnostic runner can only be started once")
             self._state = DiagnosticRunnerState.LOADING
 
-        # Exercise the actual live-only persistence policy. A regression that
-        # returns a writer here would be a privacy failure, so fail closed.
         if create_session_writer(self._app_config.output_dir, self.output_mode) is not None:
             self._finish_failure("Live-only session unexpectedly created a transcript writer.")
             return
@@ -151,7 +158,7 @@ class DiagnosticRunner:
         self._stop_requested.set()
 
         if self.state is DiagnosticRunnerState.LOADING:
-            self._emit_progress("Cancelling after model load completes...")
+            self._emit_progress("Cancelling diagnostic setup...")
             return
 
         self._begin_teardown()
@@ -163,6 +170,10 @@ class DiagnosticRunner:
         return aggregate_observations(observations, required_sample_s=self.required_sample_s)
 
     def _load_and_start(self) -> None:
+        if self.inference.device == "cuda":
+            if not self._prepare_and_preflight_gpu():
+                return
+
         try:
             engine = self._engine_factory(
                 model_name=self.inference.model_name,
@@ -189,6 +200,8 @@ class DiagnosticRunner:
                 engine=self._engine,
                 profile=self.profile,
                 on_metrics=self._on_metrics,
+                on_error=self._on_pipeline_error,
+                drain_on_stop=False,
             )
             self._recorder = self._recorder_factory(
                 audio_queue=self._audio_queue,
@@ -217,6 +230,44 @@ class DiagnosticRunner:
             name="DiagnosticWatchdog",
         ).start()
 
+    def _prepare_and_preflight_gpu(self) -> bool:
+        try:
+            self._model_preparer(
+                self.inference.model_name,
+                lambda message: self._emit_progress(message),
+            )
+        except Exception as exc:
+            log.error("Diagnostic GPU model preparation failed", exc_info=True)
+            self._finish_failure(f"Could not prepare NVIDIA GPU model: {exc}")
+            return False
+
+        if self._stop_requested.is_set():
+            self._finalize_result()
+            return False
+
+        self._emit_progress("Validating CUDA runtime with a short isolated inference...")
+        try:
+            preflight = self._gpu_preflight(
+                self.inference.model_name,
+                self.inference.compute_type,
+                stop_event=self._stop_requested,
+            )
+        except Exception as exc:
+            log.error("Diagnostic GPU preflight failed unexpectedly", exc_info=True)
+            self._finish_failure(f"GPU inference preflight failed: {exc}")
+            return False
+
+        if preflight.cancelled:
+            self._cancel_requested = True
+            self._finalize_result()
+            return False
+        if not preflight.ok:
+            self._finish_failure(preflight.message)
+            return False
+
+        self._emit_progress(preflight.message)
+        return True
+
     def _on_metrics(self, metrics: TranscriptionMetrics) -> None:
         observation = DiagnosticObservation.from_metrics(metrics)
         with self._state_lock:
@@ -235,6 +286,11 @@ class DiagnosticRunner:
             latest_rtf=observation.realtime_factor,
             latest_queue_depth=observation.queue_depth,
         )
+
+    def _on_pipeline_error(self, exc: Exception) -> None:
+        if self._failure_message is None:
+            self._failure_message = f"Transcription inference failed: {exc}"
+        self._begin_teardown()
 
     def _on_recorder_fatal(self, exc: Exception) -> None:
         self._failure_message = f"Audio capture failed: {exc}"
@@ -290,11 +346,19 @@ class DiagnosticRunner:
 
             if pipeline is not None:
                 pipeline.stop()
-                pipeline.join(timeout=60)
-                if pipeline.is_alive() and self._failure_message is None:
-                    self._failure_message = "Transcription pipeline did not stop cleanly."
+                pipeline.join(timeout=DIAGNOSTIC_PIPELINE_STOP_TIMEOUT_S)
+                if pipeline.is_alive():
+                    self._restart_required = True
+                    self._failure_message = (
+                        "Transcription inference did not stop within 10 seconds. "
+                        "The diagnostics window recovered, but restart Hearsay before "
+                        "running another test."
+                    )
         finally:
-            if engine is not None:
+            # Never tear down a native model object while a wedged worker may
+            # still be executing against it. The daemon worker is abandoned and
+            # the UI requires an app restart before any further diagnostic run.
+            if engine is not None and not self._restart_required:
                 try:
                     engine.unload()
                 except Exception:
