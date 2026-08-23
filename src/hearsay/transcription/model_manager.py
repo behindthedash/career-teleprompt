@@ -180,7 +180,9 @@ def _contains_model_payload(cache_dir: Path) -> bool:
     snapshots = cache_dir / "snapshots"
     if not snapshots.is_dir():
         return False
-    return any((snapshot / "model.bin").is_file() for snapshot in snapshots.iterdir() if snapshot.is_dir())
+    return any(
+        (snapshot / "model.bin").is_file() for snapshot in snapshots.iterdir() if snapshot.is_dir()
+    )
 
 
 def _find_incomplete_cache(name: str, model_dir: Path) -> Path | None:
@@ -221,7 +223,9 @@ def _remove_cache_dir(cache_dir: Path, model_dir: Path, name: str) -> None:
     try:
         relative = candidate.relative_to(root)
     except ValueError as exc:
-        raise RuntimeError("Refusing to repair a model cache outside Hearsay's model directory") from exc
+        raise RuntimeError(
+            "Refusing to repair a model cache outside Hearsay's model directory"
+        ) from exc
 
     if len(relative.parts) != 1 or not _cache_dir_matches_model(candidate, name):
         raise RuntimeError("Refusing to repair an unexpected model cache path")
