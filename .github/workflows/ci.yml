@@ -97,3 +97,11 @@ jobs:
           if (-not (Test-Path ".\installer_output\HearsaySetup.exe")) {
             throw "Expected installer_output\HearsaySetup.exe was not created"
           }
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: Hearsay-Windows-Installer
+          path: installer_output/HearsaySetup.exe
+          if-no-files-found: error
+          retention-days: 14
