@@ -4,14 +4,27 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
-import platform
 import re
-import subprocess
+import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Iterable
+
+# Allow direct execution from a source checkout without requiring an editable install.
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from hearsay.diagnostics.performance import (  # noqa: E402
+    DiagnosticObservation,
+    HostInfo,
+    aggregate_observations,
+    collect_host_info,
+)
+
+Observation = DiagnosticObservation
 
 _START_RE = re.compile(
     r"Starting recording \(source=(?P<source>[^,]+), output_mode=(?P<output_mode>[^,]+), "
@@ -26,18 +39,6 @@ _METRIC_RE = re.compile(
     r"rtf=(?P<rtf>[0-9.]+)x backlog=(?P<backlog>\d+) health=(?P<health>\S+)"
 )
 _STOP_MARKER = "Stopping recording"
-
-
-@dataclass(frozen=True)
-class Observation:
-    """One content-free transcription throughput observation."""
-
-    chunk_index: int
-    audio_duration_s: float
-    processing_elapsed_s: float
-    realtime_factor: float
-    queue_depth: int
-    health: str
 
 
 @dataclass
@@ -55,17 +56,6 @@ class ProfileSession:
     compute_type: str | None = None
     stopped: bool = False
     observations: list[Observation] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class HostInfo:
-    """Content-free description of the machine running the summarizer."""
-
-    system: str
-    release: str
-    machine: str
-    processor: str
-    nvidia_gpu: str | None
 
 
 @dataclass(frozen=True)
@@ -165,19 +155,16 @@ def summarize_session(
     minimum_sample_minutes: float = 3.0,
     host: HostInfo | None = None,
 ) -> ProfileSummary:
-    """Aggregate one session using the health values emitted by Hearsay itself."""
+    """Aggregate one session using the shared in-app/offline metric definitions."""
     if minimum_sample_minutes <= 0:
         raise ValueError("minimum_sample_minutes must be greater than zero")
     if not session.observations:
         raise ValueError("session has no transcription metrics")
 
-    rtfs = sorted(observation.realtime_factor for observation in session.observations)
-    audio_total = sum(observation.audio_duration_s for observation in session.observations)
-    processing_total = sum(observation.processing_elapsed_s for observation in session.observations)
-    healthy = sum(observation.health == "healthy" for observation in session.observations)
-    behind = len(session.observations) - healthy
-    required_sample_s = minimum_sample_minutes * 60.0
-
+    aggregate = aggregate_observations(
+        session.observations,
+        required_sample_s=minimum_sample_minutes * 60.0,
+    )
     return ProfileSummary(
         session_index=session.index,
         source=session.source,
@@ -189,32 +176,21 @@ def summarize_session(
         device=session.device,
         compute_type=session.compute_type,
         session_stopped=session.stopped,
-        observation_count=len(session.observations),
-        effective_audio_s=round(audio_total, 3),
-        processing_elapsed_s=round(processing_total, 3),
-        aggregate_rtf=round(processing_total / audio_total, 4) if audio_total else 0.0,
-        median_rtf=round(_percentile(rtfs, 0.50), 4),
-        p95_rtf=round(_percentile(rtfs, 0.95), 4),
-        max_rtf=round(max(rtfs), 4),
-        max_queue_depth=max(observation.queue_depth for observation in session.observations),
-        healthy_observations=healthy,
-        behind_observations=behind,
-        healthy_percent=round(healthy / len(session.observations) * 100.0, 2),
-        longest_behind_streak=_longest_behind_streak(session.observations),
-        required_sample_s=required_sample_s,
-        sample_target_met=audio_total >= required_sample_s,
+        observation_count=aggregate.observation_count,
+        effective_audio_s=aggregate.effective_audio_s,
+        processing_elapsed_s=aggregate.processing_elapsed_s,
+        aggregate_rtf=aggregate.aggregate_rtf,
+        median_rtf=aggregate.median_rtf,
+        p95_rtf=aggregate.p95_rtf,
+        max_rtf=aggregate.max_rtf,
+        max_queue_depth=aggregate.max_queue_depth,
+        healthy_observations=aggregate.healthy_observations,
+        behind_observations=aggregate.behind_observations,
+        healthy_percent=aggregate.healthy_percent,
+        longest_behind_streak=aggregate.longest_behind_streak,
+        required_sample_s=aggregate.required_sample_s,
+        sample_target_met=aggregate.sample_target_met,
         host=host or collect_host_info(),
-    )
-
-
-def collect_host_info() -> HostInfo:
-    """Describe the current host without requiring optional dependencies."""
-    return HostInfo(
-        system=platform.system(),
-        release=platform.release(),
-        machine=platform.machine(),
-        processor=platform.processor(),
-        nvidia_gpu=_detect_nvidia_gpu(),
     )
 
 
@@ -257,44 +233,6 @@ def render_text(summary: ProfileSummary) -> str:
             f"Session stop observed: {'yes' if summary.session_stopped else 'no'}",
         ]
     )
-
-
-def _percentile(sorted_values: list[float], fraction: float) -> float:
-    if not sorted_values:
-        raise ValueError("percentile requires at least one value")
-    if not 0 <= fraction <= 1:
-        raise ValueError("fraction must be between zero and one")
-    index = max(0, math.ceil(fraction * len(sorted_values)) - 1)
-    return sorted_values[index]
-
-
-def _longest_behind_streak(observations: Iterable[Observation]) -> int:
-    longest = 0
-    current = 0
-    for observation in observations:
-        if observation.health == "behind":
-            current += 1
-            longest = max(longest, current)
-        else:
-            current = 0
-    return longest
-
-
-def _detect_nvidia_gpu() -> str | None:
-    try:
-        completed = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if completed.returncode != 0:
-        return None
-    names = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
-    return "; ".join(names) or None
 
 
 def _default_log_path() -> Path | None:
