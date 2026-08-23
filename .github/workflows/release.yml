@@ -2,6 +2,9 @@ name: Release
 
 on:
   create:
+  push:
+    branches:
+      - "release/v*"
 
 permissions:
   contents: write
@@ -9,19 +12,23 @@ permissions:
 jobs:
   windows-release:
     name: Build & Publish Windows Release
-    if: github.event.ref_type == 'branch' && startsWith(github.event.ref, 'release/v')
+    if: >-
+      (github.event_name == 'create' && github.event.ref_type == 'branch' && startsWith(github.event.ref, 'release/v')) ||
+      (github.event_name == 'push' && startsWith(github.ref_name, 'release/v'))
     runs-on: windows-latest
 
     steps:
-      - name: Check out release branch
+      - name: Check out release commit
         uses: actions/checkout@v7.0.1
-        with:
-          ref: ${{ github.event.ref }}
 
       - name: Resolve and validate version
         shell: pwsh
         run: |
-          $branch = "${{ github.event.ref }}"
+          if ("${{ github.event_name }}" -eq "create") {
+            $branch = "${{ github.event.ref }}"
+          } else {
+            $branch = "${{ github.ref_name }}"
+          }
           $tag = $branch.Substring("release/".Length)
           if ($tag -notmatch '^v\d+\.\d+\.\d+$') {
             throw "Release branch must be named release/vX.Y.Z; got $branch"
@@ -110,13 +117,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create `
-            $env:RELEASE_TAG `
-            ".\installer_output\HearsaySetup.exe#HearsaySetup.exe" `
-            --repo $env:GITHUB_REPOSITORY `
-            --target "${{ github.sha }}" `
-            --title "Hearsay $env:RELEASE_TAG" `
-            --notes-file $env:RELEASE_NOTES
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload `
+              $env:RELEASE_TAG `
+              ".\installer_output\HearsaySetup.exe#HearsaySetup.exe" `
+              --repo $env:GITHUB_REPOSITORY `
+              --clobber
+          } else {
+            gh release create `
+              $env:RELEASE_TAG `
+              ".\installer_output\HearsaySetup.exe#HearsaySetup.exe" `
+              --repo $env:GITHUB_REPOSITORY `
+              --target "${{ github.sha }}" `
+              --title "Hearsay $env:RELEASE_TAG" `
+              --notes-file $env:RELEASE_NOTES
+          }
 
           gh release view `
             $env:RELEASE_TAG `
