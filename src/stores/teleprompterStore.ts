@@ -72,6 +72,7 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
       draftText: document.sections.map((section) => section.displayText).join("\n\n"),
       activeSectionIndex: 0,
       isEditing: false,
+      followingEnabled: true,
       ...followerReset,
     });
   },
@@ -82,6 +83,7 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
       draftText: document.sections.map((section) => section.displayText).join("\n\n"),
       activeSectionIndex: 0,
       isEditing: false,
+      followingEnabled: true,
       ...followerReset,
     }),
 
@@ -91,6 +93,7 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
       draftText: "",
       activeSectionIndex: 0,
       isEditing: true,
+      followingEnabled: true,
       ...followerReset,
     }),
 
@@ -101,15 +104,26 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
         ? document.sections.map((section) => section.displayText).join("\n\n")
         : get().draftText,
       isEditing: true,
+      followingEnabled: false,
     });
   },
 
   cancelEditing: () => set({ isEditing: get().document === null }),
 
   setActiveSection: (index) => {
-    const count = get().document?.sections.length ?? 0;
-    if (count === 0) return;
-    set({ activeSectionIndex: Math.max(0, Math.min(index, count - 1)) });
+    const document = get().document;
+    const count = document?.sections.length ?? 0;
+    if (!document || count === 0) return;
+
+    const activeSectionIndex = Math.max(0, Math.min(index, count - 1));
+    set({
+      activeSectionIndex,
+      cursorTokenIndex: tokenStartForSection(document, activeSectionIndex),
+      followingEnabled: false,
+      followerStatus: "idle",
+      followerConfidence: 0,
+      recoveredOnLastUpdate: false,
+    });
   },
 
   previousSection: () => get().setActiveSection(get().activeSectionIndex - 1),
@@ -122,8 +136,8 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
   setFollowingEnabled: (followingEnabled) =>
     set({
       followingEnabled,
-      followerStatus: followingEnabled ? get().followerStatus : "idle",
-      followerConfidence: followingEnabled ? get().followerConfidence : 0,
+      followerStatus: followingEnabled ? "uncertain" : "idle",
+      followerConfidence: 0,
       recoveredOnLastUpdate: false,
     }),
 
@@ -150,6 +164,7 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
       activeSectionIndex: document
         ? sectionIndexForTokenPosition(document, cursorTokenIndex)
         : get().activeSectionIndex,
+      followingEnabled: false,
       followerStatus: "idle",
       followerConfidence: 0,
       recoveredOnLastUpdate: false,
@@ -166,11 +181,19 @@ function documentTokenCount(document: TeleprompterDocument): number {
   );
 }
 
+function tokenStartForSection(document: TeleprompterDocument, sectionIndex: number): number {
+  let start = 0;
+  for (let index = 0; index < sectionIndex; index += 1) {
+    start += document.sections[index].matchText.split(" ").filter(Boolean).length;
+  }
+  return start;
+}
+
 function sectionIndexForTokenPosition(document: TeleprompterDocument, position: number): number {
   let consumed = 0;
   for (let index = 0; index < document.sections.length; index += 1) {
     consumed += document.sections[index].matchText.split(" ").filter(Boolean).length;
-    if (position <= consumed) return index;
+    if (position < consumed || index === document.sections.length - 1) return index;
   }
   return Math.max(0, document.sections.length - 1);
 }
