@@ -1,0 +1,132 @@
+name: Release
+
+on:
+  create:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    name: Build & Publish Windows Release
+    if: github.event.ref_type == 'branch' && startsWith(github.event.ref, 'release/v')
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out release branch
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.ref }}
+
+      - name: Resolve and validate version
+        shell: pwsh
+        run: |
+          $branch = "${{ github.event.ref }}"
+          $tag = $branch.Substring("release/".Length)
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "Release branch must be named release/vX.Y.Z; got $branch"
+          }
+          $version = $tag.Substring(1)
+
+          $init = Get-Content -Raw "src/hearsay/__init__.py"
+          $constants = Get-Content -Raw "src/hearsay/constants.py"
+          $installer = Get-Content -Raw "installer.iss"
+
+          if ($init -notmatch '__version__\s*=\s*"([^"]+)"') {
+            throw "Could not read __version__ from src/hearsay/__init__.py"
+          }
+          $initVersion = $Matches[1]
+          if ($constants -notmatch 'APP_VERSION\s*=\s*"([^"]+)"') {
+            throw "Could not read APP_VERSION from src/hearsay/constants.py"
+          }
+          $appVersion = $Matches[1]
+          if ($installer -notmatch '(?m)^AppVersion=([^\r\n]+)$') {
+            throw "Could not read AppVersion from installer.iss"
+          }
+          $installerVersion = $Matches[1].Trim()
+
+          foreach ($actual in @($initVersion, $appVersion, $installerVersion)) {
+            if ($actual -ne $version) {
+              throw "Version mismatch: release branch requests $version but found $actual"
+            }
+          }
+
+          $notes = "release-notes/$tag.md"
+          if (-not (Test-Path $notes)) {
+            throw "Missing release notes: $notes"
+          }
+
+          "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "RELEASE_NOTES=$notes" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install package build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build frozen application
+        run: pyinstaller --noconfirm Hearsay.spec
+
+      - name: Smoke-test diagnostics from frozen executable
+        shell: pwsh
+        run: |
+          $process = Start-Process `
+            -FilePath ".\dist\Hearsay\Hearsay.exe" `
+            -ArgumentList "--diagnostics-smoke" `
+            -Wait `
+            -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw "Frozen diagnostics smoke failed with exit code $($process.ExitCode)"
+          }
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            throw "Inno Setup compiler not found at $iscc"
+          }
+          & $iscc installer.iss
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup failed with exit code $LASTEXITCODE"
+          }
+          if (-not (Test-Path ".\installer_output\HearsaySetup.exe")) {
+            throw "Expected installer_output\HearsaySetup.exe was not created"
+          }
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create `
+            $env:RELEASE_TAG `
+            ".\installer_output\HearsaySetup.exe#HearsaySetup.exe" `
+            --repo $env:GITHUB_REPOSITORY `
+            --target "${{ github.sha }}" `
+            --title "Hearsay $env:RELEASE_TAG" `
+            --notes-file $env:RELEASE_NOTES
+
+          gh release view `
+            $env:RELEASE_TAG `
+            --repo $env:GITHUB_REPOSITORY `
+            --json url,assets
+
+      - name: Preserve release installer artifact
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: Hearsay-${{ env.RELEASE_VERSION }}-Windows-Installer
+          path: installer_output/HearsaySetup.exe
+          if-no-files-found: error
+          retention-days: 30
