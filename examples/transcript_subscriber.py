@@ -5,8 +5,12 @@ This registration API is intentionally in-process; it is not a webhook or IPC
 transport.
 """
 
-from hearsay.events import TranscriptEvent, TranscriptSource, TranscriptSubscription
-from hearsay.events import register_transcript_handler
+from hearsay.events import (
+    TranscriptEvent,
+    TranscriptSource,
+    TranscriptSubscription,
+    register_transcript_handler,
+)
 
 
 def _print_remote_speech(event: TranscriptEvent) -> None:
