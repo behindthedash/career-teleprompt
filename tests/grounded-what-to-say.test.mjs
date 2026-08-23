@@ -5,7 +5,13 @@ const source = readFileSync("src-tauri/src/intelligence/prompt_templates.rs", "u
 const start = source.indexOf("pub const WHAT_TO_SAY_PROMPT");
 const end = source.indexOf("pub const SHORTEN_PROMPT", start);
 assert.ok(start >= 0 && end > start, "WHAT_TO_SAY_PROMPT must be defined before SHORTEN_PROMPT");
-const prompt = source.slice(start, end);
+
+// Rust uses `\` at physical line endings to keep these prompt literals readable.
+// Normalize those source-level continuations before testing the effective prompt contract.
+const prompt = source
+  .slice(start, end)
+  .replace(/\\\r?\n/g, " ")
+  .replace(/\s+/g, " ");
 
 for (const required of [
   "Never invent or",
