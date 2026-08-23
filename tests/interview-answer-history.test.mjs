@@ -15,7 +15,7 @@ const prompt = promptSource
 
 for (const required of [
   "ANSWER-HISTORY RULES",
-  "earlier \\\"You:\\\" responses",
+  "responses in the meeting transcript as stories, examples, and claims",
   "stories, examples, and claims the user has already used",
   "prefer a materially different example",
   "Do not force novelty",
