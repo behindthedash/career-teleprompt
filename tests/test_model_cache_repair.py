@@ -1,4 +1,4 @@
-"""Regression coverage for incomplete faster-whisper cache recovery."""
+"""Regression coverage for Windows-safe faster-whisper model recovery."""
 
 from __future__ import annotations
 
@@ -18,59 +18,119 @@ if str(SRC) not in sys.path:
 from hearsay.transcription import model_manager
 
 
-def _hf_cache(model_root: Path, repo_dir: str, *, payload: bool) -> tuple[Path, Path]:
-    cache = model_root / repo_dir
-    snapshot = cache / "snapshots" / "synthetic-revision"
-    snapshot.mkdir(parents=True)
-    if payload:
-        (snapshot / "model.bin").write_bytes(b"synthetic-model")
-    return cache, snapshot
+def _write_model_payload(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "config.json").write_text("{}", encoding="utf-8")
+    (path / "model.bin").write_bytes(b"synthetic-model")
 
 
-def test_is_model_downloaded_requires_model_payload(monkeypatch, tmp_path) -> None:
+def _downloader(calls: list[Path]):
+    def download(name: str, *, output_dir: str):
+        assert name in {"small.en", "turbo"}
+        target = Path(output_dir)
+        calls.append(target)
+        _write_model_payload(target)
+        return str(target)
+
+    return download
+
+
+def test_legacy_huggingface_snapshot_is_not_considered_ready(monkeypatch, tmp_path) -> None:
     model_root = tmp_path / "models"
-    cache, snapshot = _hf_cache(
-        model_root,
-        "models--Systran--faster-whisper-small.en",
-        payload=False,
+    legacy_snapshot = (
+        model_root
+        / "models--Systran--faster-whisper-small.en"
+        / "snapshots"
+        / "synthetic-revision"
     )
+    _write_model_payload(legacy_snapshot)
     monkeypatch.setattr(model_manager, "get_models_dir", lambda: model_root)
 
-    assert cache.exists()
     assert model_manager.is_model_downloaded("small.en") is False
 
-    (snapshot / "model.bin").write_bytes(b"synthetic-model")
+
+def test_materialized_model_is_considered_downloaded(monkeypatch, tmp_path) -> None:
+    model_root = tmp_path / "models"
+    _write_model_payload(model_root / "local-small.en")
+    monkeypatch.setattr(model_manager, "get_models_dir", lambda: model_root)
+
     assert model_manager.is_model_downloaded("small.en") is True
 
 
-def test_turbo_cache_alias_is_recognized(monkeypatch, tmp_path) -> None:
+def test_load_materializes_model_and_uses_direct_local_path(monkeypatch, tmp_path) -> None:
     model_root = tmp_path / "models"
-    _hf_cache(
-        model_root,
-        "models--mobiuslabsgmbh--faster-whisper-large-v3-turbo",
-        payload=True,
-    )
     monkeypatch.setattr(model_manager, "get_models_dir", lambda: model_root)
-
-    assert model_manager.is_model_downloaded("turbo") is True
-
-
-def test_incomplete_cache_is_removed_before_model_load(monkeypatch, tmp_path) -> None:
-    model_root = tmp_path / "models"
-    cache, _ = _hf_cache(
-        model_root,
-        "models--Systran--faster-whisper-small.en",
-        payload=False,
-    )
-    monkeypatch.setattr(model_manager, "get_models_dir", lambda: model_root)
-
-    calls = []
-    statuses = []
+    downloads: list[Path] = []
+    factory_calls = []
     sentinel = object()
 
-    def factory(*args, **kwargs):
-        calls.append((args, kwargs))
-        assert not cache.exists()
+    def factory(model_path: str, **kwargs):
+        path = Path(model_path)
+        factory_calls.append((path, kwargs))
+        assert path == model_root / "local-small.en"
+        assert (path / "model.bin").is_file()
+        assert "download_root" not in kwargs
+        return sentinel
+
+    loaded = model_manager.load_model_with_repair(
+        "small.en",
+        device="cpu",
+        compute_type="int8",
+        model_factory=factory,
+        model_downloader=_downloader(downloads),
+    )
+
+    assert loaded is sentinel
+    assert len(downloads) == 1
+    assert downloads[0].name == ".local-small.en.download"
+    assert len(factory_calls) == 1
+    assert model_manager.is_model_downloaded("small.en") is True
+
+
+def test_incomplete_materialized_model_is_replaced(monkeypatch, tmp_path) -> None:
+    model_root = tmp_path / "models"
+    target = model_root / "local-small.en"
+    target.mkdir(parents=True)
+    (target / "config.json").write_text("{}", encoding="utf-8")
+    stale = target / "stale.txt"
+    stale.write_text("partial", encoding="utf-8")
+    monkeypatch.setattr(model_manager, "get_models_dir", lambda: model_root)
+    downloads: list[Path] = []
+
+    loaded = model_manager.load_model_with_repair(
+        "small.en",
+        device="cpu",
+        compute_type="int8",
+        model_factory=lambda *_args, **_kwargs: object(),
+        model_downloader=_downloader(downloads),
+    )
+
+    assert loaded is not None
+    assert len(downloads) == 1
+    assert not stale.exists()
+    assert (target / "model.bin").is_file()
+
+
+def test_winerror_448_repairs_materialized_model_and_retries_once(monkeypatch, tmp_path) -> None:
+    model_root = tmp_path / "models"
+    monkeypatch.setattr(model_manager, "get_models_dir", lambda: model_root)
+    downloads: list[Path] = []
+    statuses: list[str] = []
+    calls = 0
+    sentinel = object()
+
+    def factory(model_path: str, **_kwargs):
+        nonlocal calls
+        calls += 1
+        path = Path(model_path)
+        if calls == 1:
+            raise OSError(
+                448,
+                "The path cannot be traversed because it contains an untrusted mount point",
+                str(path / "model.bin"),
+            )
+        assert path == model_root / "local-small.en"
+        assert (path / "model.bin").is_file()
         return sentinel
 
     loaded = model_manager.load_model_with_repair(
@@ -79,96 +139,118 @@ def test_incomplete_cache_is_removed_before_model_load(monkeypatch, tmp_path) ->
         compute_type="int8",
         status_callback=statuses.append,
         model_factory=factory,
+        model_downloader=_downloader(downloads),
     )
 
     assert loaded is sentinel
-    assert len(calls) == 1
-    assert any("Incomplete model cache detected" in status for status in statuses)
-
-
-def test_missing_file_load_error_repairs_cache_and_retries_once(monkeypatch, tmp_path) -> None:
-    model_root = tmp_path / "models"
-    cache, snapshot = _hf_cache(
-        model_root,
-        "models--Systran--faster-whisper-small.en",
-        payload=True,
-    )
-    monkeypatch.setattr(model_manager, "get_models_dir", lambda: model_root)
-
-    calls = []
-    statuses = []
-    sentinel = object()
-
-    def factory(*args, **kwargs):
-        calls.append((args, kwargs))
-        if len(calls) == 1:
-            raise RuntimeError(f"Unable to open file 'tokenizer.json' in model '{snapshot}'")
-        assert not cache.exists()
-        return sentinel
-
-    loaded = model_manager.load_model_with_repair(
-        "small.en",
-        device="cpu",
-        compute_type="int8",
-        status_callback=statuses.append,
-        model_factory=factory,
-    )
-
-    assert loaded is sentinel
-    assert len(calls) == 2
-    assert any("re-downloading" in status for status in statuses)
+    assert calls == 2
+    assert len(downloads) == 2
+    assert any("inaccessible" in status for status in statuses)
     assert statuses[-1] == "Model 'small.en' repaired and ready."
 
 
-def test_load_error_outside_hearsay_cache_is_never_deleted(monkeypatch, tmp_path) -> None:
+def test_repair_does_not_follow_error_path_outside_hearsay(monkeypatch, tmp_path) -> None:
     model_root = tmp_path / "models"
-    model_root.mkdir()
     outside = tmp_path / "outside-model"
-    outside.mkdir()
-    (outside / "keep.txt").write_text("do not delete", encoding="utf-8")
+    _write_model_payload(outside)
+    keep = outside / "keep.txt"
+    keep.write_text("do not delete", encoding="utf-8")
     monkeypatch.setattr(model_manager, "get_models_dir", lambda: model_root)
-
+    downloads: list[Path] = []
     calls = 0
 
-    def factory(*args, **kwargs):
+    def factory(_model_path: str, **_kwargs):
         nonlocal calls
         calls += 1
-        raise RuntimeError(f"Unable to open file 'model.bin' in model '{outside}'")
+        if calls == 1:
+            raise RuntimeError(
+                "Unable to open file 'model.bin' in model " f"'{outside}'"
+            )
+        return object()
 
-    with pytest.raises(RuntimeError, match="Unable to open file"):
+    model_manager.load_model_with_repair(
+        "small.en",
+        device="cpu",
+        compute_type="int8",
+        model_factory=factory,
+        model_downloader=_downloader(downloads),
+    )
+
+    assert keep.read_text(encoding="utf-8") == "do not delete"
+    assert calls == 2
+    assert len(downloads) == 2
+
+
+def test_nonrepairable_model_error_is_not_retried(monkeypatch, tmp_path) -> None:
+    model_root = tmp_path / "models"
+    monkeypatch.setattr(model_manager, "get_models_dir", lambda: model_root)
+    downloads: list[Path] = []
+    calls = 0
+
+    def factory(_model_path: str, **_kwargs):
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("CUDA out of memory")
+
+    with pytest.raises(RuntimeError, match="CUDA out of memory"):
         model_manager.load_model_with_repair(
             "small.en",
             device="cpu",
             compute_type="int8",
             model_factory=factory,
+            model_downloader=_downloader(downloads),
         )
 
     assert calls == 1
-    assert (outside / "keep.txt").read_text(encoding="utf-8") == "do not delete"
+    assert len(downloads) == 1
 
 
 def test_repair_attempt_does_not_loop_forever(monkeypatch, tmp_path) -> None:
     model_root = tmp_path / "models"
-    _, snapshot = _hf_cache(
-        model_root,
-        "models--Systran--faster-whisper-small.en",
-        payload=True,
-    )
     monkeypatch.setattr(model_manager, "get_models_dir", lambda: model_root)
-
+    downloads: list[Path] = []
     calls = 0
 
-    def factory(*args, **kwargs):
+    def factory(model_path: str, **_kwargs):
         nonlocal calls
         calls += 1
-        raise RuntimeError(f"Unable to open file 'model.bin' in model '{snapshot}'")
+        raise OSError(
+            448,
+            "The path cannot be traversed because it contains an untrusted mount point",
+            str(Path(model_path) / "model.bin"),
+        )
 
-    with pytest.raises(RuntimeError, match="Automatic model cache repair failed"):
+    with pytest.raises(RuntimeError, match="Automatic model repair failed"):
         model_manager.load_model_with_repair(
             "small.en",
             device="cpu",
             compute_type="int8",
             model_factory=factory,
+            model_downloader=_downloader(downloads),
         )
 
     assert calls == 2
+    assert len(downloads) == 2
+
+
+def test_failed_download_does_not_promote_partial_model(monkeypatch, tmp_path) -> None:
+    model_root = tmp_path / "models"
+    monkeypatch.setattr(model_manager, "get_models_dir", lambda: model_root)
+
+    def broken_download(_name: str, *, output_dir: str):
+        staging = Path(output_dir)
+        staging.mkdir(parents=True)
+        (staging / "config.json").write_text("{}", encoding="utf-8")
+        raise RuntimeError("network interrupted")
+
+    with pytest.raises(RuntimeError, match="network interrupted"):
+        model_manager.load_model_with_repair(
+            "small.en",
+            device="cpu",
+            compute_type="int8",
+            model_factory=lambda *_args, **_kwargs: object(),
+            model_downloader=broken_download,
+        )
+
+    assert not (model_root / "local-small.en").exists()
+    assert not (model_root / ".local-small.en.download").exists()
