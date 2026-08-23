@@ -19,6 +19,12 @@ from hearsay.output.markdown_writer import MarkdownWriter
 from hearsay.session import SessionOutputMode, create_session_writer
 from hearsay.transcription.engine import TranscriptionEngine
 from hearsay.transcription.pipeline import TranscriptionPipeline
+from hearsay.transcription.profile import (
+    NORMAL_TRANSCRIPTION_PROFILE,
+    TranscriptionMetrics,
+    TranscriptionProfile,
+)
+from hearsay.transcription.runtime import ObservedTranscriptionPipeline, ProfiledAudioRecorder
 from hearsay.ui.about_window import AboutWindow
 from hearsay.ui.live_view import LiveTranscriptWindow
 from hearsay.ui.settings_window import SettingsWindow
@@ -55,6 +61,7 @@ class HearsayApp:
         self._recording_start_time: float | None = None
         self._event_session_id: str | None = None
         self._session_output_mode = SessionOutputMode.PERSISTED
+        self._transcription_profile = NORMAL_TRANSCRIPTION_PROFILE
         self._teardown_thread: threading.Thread | None = None
         # Incremented on every start/stop so a slow model load can detect
         # that its session was cancelled before it starts the recorder.
@@ -112,18 +119,27 @@ class HearsayApp:
         self,
         source: str,
         output_mode: SessionOutputMode = SessionOutputMode.PERSISTED,
+        transcription_profile: TranscriptionProfile = NORMAL_TRANSCRIPTION_PROFILE,
     ) -> None:
-        """Start recording from the given source using the requested output policy."""
+        """Start recording using the requested output and transcription policies."""
         if self._recording:
             log.warning("Already recording, ignoring start request")
             return
 
         output_mode = SessionOutputMode(output_mode)
-        log.info("Starting recording (source=%s, output_mode=%s)", source, output_mode.value)
+        log.info(
+            "Starting recording (source=%s, output_mode=%s, profile=%s, cadence=%.1fs/%.1fs)",
+            source,
+            output_mode.value,
+            transcription_profile.name,
+            transcription_profile.chunk_duration_s,
+            transcription_profile.overlap_duration_s,
+        )
         self._recording = True
         self._recording_start_time = time.time()
         self._event_session_id = self._event_dispatcher.start_session()
         self._session_output_mode = output_mode
+        self._transcription_profile = transcription_profile
         event_session_id = self._event_session_id
         self._session_gen += 1
         session_gen = self._session_gen
@@ -168,18 +184,21 @@ class HearsayApp:
                 engine.unload()
                 return
 
-            # Start pipeline
-            self._pipeline = TranscriptionPipeline(
+            # Start pipeline with content-free throughput/backpressure reporting.
+            self._pipeline = ObservedTranscriptionPipeline(
                 audio_queue=audio_queue,
                 transcript_queue=transcript_queue,
                 engine=engine,
+                profile=transcription_profile,
+                on_metrics=lambda metrics: self._on_transcription_metrics(session_gen, metrics),
             )
             self._pipeline.start()
 
-            # Start recorder
-            self._recorder = AudioRecorder(
+            # Start recorder with immutable per-session cadence/overlap settings.
+            self._recorder = ProfiledAudioRecorder(
                 audio_queue=audio_queue,
                 source=source,
+                profile=transcription_profile,
                 mic_device_name=self._config.mic_device_name,
                 loopback_device_name=self._config.loopback_device_name,
                 on_fatal=self._on_recorder_fatal,
@@ -195,22 +214,60 @@ class HearsayApp:
         if self._tray:
             self._tray.set_processing()
 
-        # Update live view
-        safe_after(self._root, 0, lambda: self._ensure_live_view().set_status("Loading model..."))
+        # Update live view with profile-aware loading wording.
+        if transcription_profile.name == NORMAL_TRANSCRIPTION_PROFILE.name:
+            loading_status = "Loading model..."
+        else:
+            loading_status = (
+                f"Loading model ({transcription_profile.chunk_duration_s:g}s live cadence)..."
+            )
+        safe_after(self._root, 0, lambda: self._ensure_live_view().set_status(loading_status))
 
     def _on_recording_started(self) -> None:
         """Called on main thread after model loaded and recording started."""
         if self._tray:
             self._tray.set_recording(True)
         if self._live_view:
-            if self._session_output_mode is SessionOutputMode.LIVE_ONLY:
-                self._live_view.set_status("Recording (live only — Hearsay transcript not saved)")
-            else:
-                self._live_view.set_status("Recording...")
+            self._live_view.set_status(self._recording_status())
         # Start polling transcript queue
         self._poll_transcripts()
         # Watchdog: catch a recorder that dies without reporting
         self._watch_recorder(self._recorder)
+
+    def _recording_status(self) -> str:
+        """Return precise status for the current session policies."""
+        notes: list[str] = []
+        if self._transcription_profile.name != NORMAL_TRANSCRIPTION_PROFILE.name:
+            notes.append(f"{self._transcription_profile.chunk_duration_s:g}s live cadence")
+        if self._session_output_mode is SessionOutputMode.LIVE_ONLY:
+            notes.append("Hearsay transcript not saved")
+        if not notes:
+            return "Recording..."
+        return f"Recording ({'; '.join(notes)})"
+
+    def _on_transcription_metrics(
+        self,
+        session_gen: int,
+        metrics: TranscriptionMetrics,
+    ) -> None:
+        """Surface live-profile throughput health without changing models."""
+        if not self._recording or self._session_gen != session_gen:
+            return
+        if metrics.profile_name == NORMAL_TRANSCRIPTION_PROFILE.name:
+            return
+
+        status = (
+            f"Recording (live {metrics.health.value}; RTF {metrics.realtime_factor:.2f}x; "
+            f"backlog {metrics.queue_depth}"
+        )
+        if self._session_output_mode is SessionOutputMode.LIVE_ONLY:
+            status += "; Hearsay transcript not saved"
+        status += ")"
+        safe_after(
+            self._root,
+            0,
+            lambda: self._live_view.set_status(status) if self._live_view else None,
+        )
 
     def _on_recorder_fatal(self, exc: Exception) -> None:
         """Recorder reported an unrecoverable failure (called from its thread)."""
@@ -277,16 +334,19 @@ class HearsayApp:
         self._recording = False
         self._session_gen += 1
         output_mode = self._session_output_mode
+        transcription_profile = self._transcription_profile
 
         # Update tray immediately so the menu is responsive
         if self._tray:
             self._tray.set_recording(False)
 
-        # Update live view status immediately with precise persistence wording.
+        # Update live view status immediately with precise session wording.
+        stop_notes: list[str] = []
+        if transcription_profile.name != NORMAL_TRANSCRIPTION_PROFILE.name:
+            stop_notes.append("live cadence")
         if output_mode is SessionOutputMode.LIVE_ONLY:
-            stop_status = "Stopping (live only — Hearsay transcript not saved)..."
-        else:
-            stop_status = "Saving..."
+            stop_notes.append("Hearsay transcript not saved")
+        stop_status = f"Stopping ({'; '.join(stop_notes)})..." if stop_notes else "Saving..."
         safe_after(
             self._root,
             0,
@@ -311,6 +371,7 @@ class HearsayApp:
         self._recording_start_time = None
         self._event_session_id = None
         self._session_output_mode = SessionOutputMode.PERSISTED
+        self._transcription_profile = NORMAL_TRANSCRIPTION_PROFILE
 
         self._teardown_thread = threading.Thread(
             target=self._teardown_recording,
@@ -531,6 +592,7 @@ class HearsayApp:
             self._recording_start_time = None
             self._event_session_id = None
             self._session_output_mode = SessionOutputMode.PERSISTED
+            self._transcription_profile = NORMAL_TRANSCRIPTION_PROFILE
         elif self._teardown_thread is not None:
             self._teardown_thread.join(timeout=30)
             self._teardown_thread = None
