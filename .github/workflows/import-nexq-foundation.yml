@@ -67,6 +67,10 @@ jobs:
           Upstream deployment/release workflows, internal planning artifacts, Playwright captures,
           and the NexQ marketing website are intentionally not imported. Career Teleprompt will
           define its own release and branding flow after the runtime foundation is validated.
+
+          The importer validates the platform-independent frontend before committing the tree.
+          Windows-native Rust validation is intentionally delegated to the imported NexQ CI on
+          `windows-latest`, matching the application's supported platform and upstream CI contract.
           EOF
 
       - name: Setup Node
@@ -74,25 +78,6 @@ jobs:
         with:
           node-version: 20
           cache: npm
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Linux Tauri and audio build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            libglib2.0-dev \
-            libgtk-3-dev \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libssl-dev \
-            libasound2-dev \
-            libxdo-dev \
-            patchelf
 
       - name: Install dependencies
         run: npm ci
@@ -102,10 +87,6 @@ jobs:
 
       - name: Frontend production build
         run: npm run build
-
-      - name: Rust check (Linux sanity)
-        run: cargo check
-        working-directory: src-tauri
 
       - name: Commit imported foundation
         shell: bash
