@@ -1,0 +1,19 @@
+name: "CI: OpenSpec validate"
+on:
+  pull_request:
+    paths:
+      - "openspec/**"
+
+jobs:
+  openspec-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Unpinned @latest: OpenSpec has no stable major yet and this workflow
+      # is meant to be a portable drop-in with no repo-local lockfile to keep
+      # current -- the tradeoff is a validate rule that can shift under a repo
+      # without warning if OpenSpec ships a breaking release, in exchange for
+      # never going stale on an old CLI version.
+      - name: openspec validate --all --strict
+        run: npx --yes @fission-ai/openspec@latest validate --all --strict
