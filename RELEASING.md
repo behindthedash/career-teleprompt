@@ -1,61 +1,79 @@
 # Releasing Hearsay
 
-Steps to create a new GitHub release with the installer attached.
+The fork publishes Windows releases through GitHub Actions so the installer is built from the exact merged commit and attached to the GitHub Release automatically.
 
-## Prerequisites
+## 1. Bump the version
 
-- `build.bat` dependencies (64-bit Python 3.11+, PyInstaller)
-- Inno Setup 6+ (`winget install JRSoftware.InnoSetup`)
-- GitHub CLI (`winget install GitHub.cli`), authenticated once with `gh auth login`
-
-## Bump the version
-
-Update the version number in all three files (keep them in sync):
+Update the version number in all three files and keep them in sync:
 
 - `src/hearsay/__init__.py` — `__version__`
 - `src/hearsay/constants.py` — `APP_VERSION`
 - `installer.iss` — `AppVersion`
 
-> Do **not** change `AppId` in `installer.iss`. It is the app's permanent identity in Windows (Add/Remove Programs and upgrade matching) and must stay fixed — changing it makes Windows treat a new build as a separate product, so upgrades stop recognizing existing installs.
+Do **not** change `AppId` in `installer.iss`. It is the permanent Windows product identity used for upgrades and Add/Remove Programs.
 
-## Build the installer
+## 2. Add release notes
 
-```bash
-# 1. Bundle the app with PyInstaller (build.bat wraps `pyinstaller Hearsay.spec`)
-build.bat
+Create:
 
-# 2. Compile the Windows installer
-"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+```text
+release-notes/vX.Y.Z.md
 ```
 
-Output: `installer_output\HearsaySetup.exe`
+The release workflow uses this file verbatim as the GitHub Release notes.
 
-## Commit, push, then create the release
+## 3. Merge through `dev`
 
-Commit the version bump (stage explicitly — avoid `git add -A`), push `master`, then create the release from the pushed commit with the installer attached:
+Open a PR to `dev` and require the normal Windows CI gate:
+
+- Ruff lint
+- Ruff format check
+- pytest on Python 3.11 and 3.14
+- frozen-app diagnostics smoke
+- Inno Setup installer build
+
+The CI package job also preserves `HearsaySetup.exe` as a downloadable Actions artifact.
+
+## 4. Publish the release
+
+After the release PR is merged, create a branch from the merged `dev` commit named exactly:
+
+```text
+release/vX.Y.Z
+```
+
+The `.github/workflows/release.yml` `create` workflow then:
+
+1. Validates the branch version against all three application/installer version sources.
+2. Requires `release-notes/vX.Y.Z.md`.
+3. Builds the PyInstaller application on Windows.
+4. Runs the frozen diagnostics smoke test.
+5. Builds `installer_output\HearsaySetup.exe` with Inno Setup.
+6. Creates GitHub Release `vX.Y.Z` from that exact commit.
+7. Attaches `HearsaySetup.exe` to the release.
+8. Preserves the installer as a 30-day Actions artifact as a fallback.
+
+No local GitHub CLI or local release build is required for the normal release path.
+
+## 5. Verify
+
+Confirm:
+
+1. The release appears at `https://github.com/behindthedash/hearsay/releases`.
+2. `HearsaySetup.exe` is listed as a downloadable release asset.
+3. The release tag matches the three version sources.
+4. Installing the new build upgrades the existing Hearsay installation rather than creating a second product entry.
+
+## Local/manual fallback
+
+If GitHub Actions is unavailable, the legacy local process still works:
 
 ```bash
-git add src/hearsay/__init__.py src/hearsay/constants.py installer.iss   # + any code/doc changes
-git commit -m "…summary… (vX.Y.Z)"
-git push origin master
+pyinstaller --noconfirm Hearsay.spec
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
 
 gh release create vX.Y.Z installer_output/HearsaySetup.exe \
-  --target master --title "Hearsay vX.Y.Z" --notes-file notes.md
-
-git fetch --tags   # local tags lag behind GitHub until you fetch
+  --target dev --title "Hearsay vX.Y.Z" --notes-file release-notes/vX.Y.Z.md
 ```
 
-Write the release notes in a file and pass `--notes-file` rather than inlining them — it sidesteps shell-quoting pitfalls (especially in PowerShell, the project's default shell). To auto-generate notes from commits instead, swap in `--generate-notes`.
-
-## Verify
-
-After creating the release, confirm:
-
-1. The release appears at https://github.com/parkscloud/Hearsay/releases
-2. `HearsaySetup.exe` is listed as a downloadable asset
-3. The "Installed version" link in README.md resolves to the releases page
-
-## Notes
-
-- The version in `installer.iss` (`AppVersion=`) should match the release tag.
-- This file is tracked in the repo for portability.
+Run `git fetch --tags` afterward if local tags are needed.
