@@ -177,9 +177,7 @@ class PerformanceDiagnosticsWindow(ctk.CTkToplevel):
         )
         self._stop_button.pack(pady=(0, 12))
 
-        ctk.CTkLabel(self, text="Result", font=("Segoe UI", 13, "bold")).pack(
-            anchor="w", padx=25
-        )
+        ctk.CTkLabel(self, text="Result", font=("Segoe UI", 13, "bold")).pack(anchor="w", padx=25)
         self._result_box = ctk.CTkTextbox(self, height=210, font=("Consolas", 11))
         self._result_box.pack(fill="both", expand=True, padx=25, pady=(4, 10))
         self._result_box.insert("1.0", "No completed test yet.")
