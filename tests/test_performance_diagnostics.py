@@ -22,7 +22,11 @@ from hearsay.diagnostics.performance import (
 from hearsay.diagnostics.runner import DiagnosticRunner, DiagnosticRunnerState
 from hearsay.session import SessionOutputMode
 from hearsay.transcription.gpu_detect import GPUInfo
-from hearsay.transcription.profile import LIVE_TRANSCRIPTION_PROFILE, TranscriptionHealth, TranscriptionMetrics
+from hearsay.transcription.profile import (
+    LIVE_TRANSCRIPTION_PROFILE,
+    TranscriptionHealth,
+    TranscriptionMetrics,
+)
 
 HOST = HostInfo(
     system="Windows",
