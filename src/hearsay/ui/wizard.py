@@ -404,7 +404,9 @@ class SetupWizard(ctk.CTkToplevel):
         self._dl_progress.set(1)
         self._dl_progress.configure(mode="determinate")
         if self._gpu_setup_fell_back:
-            text = "CPU model downloaded successfully. GPU support can be retried later in Settings."
+            text = (
+                "CPU model downloaded successfully. GPU support can be retried later in Settings."
+            )
         else:
             text = "Transcription components are ready!"
         self._dl_status.configure(text=text, text_color="#4da6ff")
