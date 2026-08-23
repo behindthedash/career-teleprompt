@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -11,6 +11,11 @@ import {
 import { useTeleprompterFollower } from "../hooks/useTeleprompterFollower";
 import { useTeleprompterStore } from "../stores/teleprompterStore";
 import type { TeleprompterFormat } from "../teleprompter/content";
+import {
+  buildDisplaySections,
+  findReadingPieceIndex,
+  pieceReadingState,
+} from "../teleprompter/display";
 
 export function TeleprompterPanel() {
   useTeleprompterFollower();
@@ -18,10 +23,13 @@ export function TeleprompterPanel() {
   const document = useTeleprompterStore((state) => state.document);
   const draftText = useTeleprompterStore((state) => state.draftText);
   const activeSectionIndex = useTeleprompterStore((state) => state.activeSectionIndex);
+  const cursorTokenIndex = useTeleprompterStore((state) => state.cursorTokenIndex);
   const fontSize = useTeleprompterStore((state) => state.fontSize);
   const lineHeight = useTeleprompterStore((state) => state.lineHeight);
   const isEditing = useTeleprompterStore((state) => state.isEditing);
   const followerStatus = useTeleprompterStore((state) => state.followerStatus);
+  const followerConfidence = useTeleprompterStore((state) => state.followerConfidence);
+  const recoveredOnLastUpdate = useTeleprompterStore((state) => state.recoveredOnLastUpdate);
   const followingEnabled = useTeleprompterStore((state) => state.followingEnabled);
   const setDraftText = useTeleprompterStore((state) => state.setDraftText);
   const setPreparedText = useTeleprompterStore((state) => state.setPreparedText);
@@ -34,19 +42,39 @@ export function TeleprompterPanel() {
   const decreaseFontSize = useTeleprompterStore((state) => state.decreaseFontSize);
   const setLineHeight = useTeleprompterStore((state) => state.setLineHeight);
   const setFollowingEnabled = useTeleprompterStore((state) => state.setFollowingEnabled);
+  const setActiveSection = useTeleprompterStore((state) => state.setActiveSection);
 
   const [format, setFormat] = useState<TeleprompterFormat>("text");
   const [error, setError] = useState<string | null>(null);
-  const sectionRefs = useRef<Array<HTMLDivElement | null>>([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const readingPieceRef = useRef<HTMLSpanElement | null>(null);
+
+  const displaySections = useMemo(
+    () => (document ? buildDisplaySections(document) : []),
+    [document],
+  );
+  const activeDisplaySection = displaySections[activeSectionIndex];
+  const readingPieceIndex = activeDisplaySection
+    ? findReadingPieceIndex(activeDisplaySection.pieces, cursorTokenIndex)
+    : -1;
 
   useEffect(() => {
     if (isEditing) return;
-    sectionRefs.current[activeSectionIndex]?.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
+    const frame = window.requestAnimationFrame(() => {
+      const container = scrollRef.current;
+      const target = readingPieceRef.current;
+      if (!container || !target) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const desiredTop =
+        container.scrollTop +
+        (targetRect.top - containerRect.top) -
+        container.clientHeight * 0.42;
+      container.scrollTo({ top: Math.max(0, desiredTop), behavior: "smooth" });
     });
-  }, [activeSectionIndex, isEditing]);
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeSectionIndex, cursorTokenIndex, isEditing]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -83,7 +111,7 @@ export function TeleprompterPanel() {
               Teleprompter Script
             </span>
           </div>
-          <div className="flex rounded-md border border-border/30 overflow-hidden">
+          <div className="flex overflow-hidden rounded-md border border-border/30">
             <FormatButton active={format === "text"} onClick={() => setFormat("text")}>Text</FormatButton>
             <FormatButton active={format === "markdown"} onClick={() => setFormat("markdown")}>Markdown</FormatButton>
           </div>
@@ -104,7 +132,7 @@ export function TeleprompterPanel() {
           )}
           <div className="flex shrink-0 items-center justify-between gap-3">
             <span className="text-[10px] text-muted-foreground/45">
-              Page Up / Page Down moves between prepared sections while prompting.
+              Speech following starts when the script is loaded. Page Up / Page Down is a manual override.
             </span>
             <div className="flex items-center gap-2">
               {document && (
@@ -132,6 +160,24 @@ export function TeleprompterPanel() {
   const sections = document.sections;
   const canGoBack = activeSectionIndex > 0;
   const canGoForward = activeSectionIndex < sections.length - 1;
+  const statusLabel = followingEnabled
+    ? followerStatus === "idle"
+      ? "Ready"
+      : followerStatus === "following"
+        ? recoveredOnLastUpdate
+          ? "Recovered"
+          : "Following"
+        : followerStatus === "uncertain"
+          ? "Holding"
+          : "Lost"
+    : "Paused";
+  const statusClass = !followingEnabled
+    ? "bg-muted/20 text-muted-foreground/55"
+    : followerStatus === "lost"
+      ? "bg-destructive/10 text-destructive/80"
+      : followerStatus === "uncertain"
+        ? "bg-warning/10 text-warning/80"
+        : "bg-success/10 text-success/80";
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-card/20">
@@ -146,18 +192,11 @@ export function TeleprompterPanel() {
           </span>
           <button
             onClick={() => setFollowingEnabled(!followingEnabled)}
-            className={`rounded-full px-2 py-0.5 text-[9px] font-medium transition-colors ${
-              followingEnabled
-                ? followerStatus === "lost"
-                  ? "bg-destructive/10 text-destructive/80"
-                  : followerStatus === "uncertain"
-                    ? "bg-warning/10 text-warning/80"
-                    : "bg-success/10 text-success/80"
-                : "bg-muted/20 text-muted-foreground/50"
-            }`}
+            className={`rounded-full px-2 py-0.5 text-[9px] font-medium transition-colors ${statusClass}`}
             title={followingEnabled ? "Pause speech following" : "Resume speech following"}
           >
-            {followingEnabled ? (followerStatus === "idle" ? "Follow ready" : `Follow ${followerStatus}`) : "Follow paused"}
+            {statusLabel}
+            {followingEnabled && followerConfidence > 0 ? ` ${Math.round(followerConfidence * 100)}%` : ""}
           </button>
           {sections.length > 1 && (
             <span className="text-[10px] tabular-nums text-muted-foreground/45">
@@ -209,24 +248,47 @@ export function TeleprompterPanel() {
           className="h-full overflow-y-auto overscroll-contain px-[8%] py-[38%] scroll-smooth"
         >
           <div className="mx-auto max-w-4xl space-y-16 pb-[38%]">
-            {sections.map((section, index) => {
-              const active = index === activeSectionIndex;
+            {displaySections.map((displaySection, sectionIndex) => {
+              const active = sectionIndex === activeSectionIndex;
+              const sectionReadingPieceIndex = active
+                ? findReadingPieceIndex(displaySection.pieces, cursorTokenIndex)
+                : -1;
               return (
                 <div
-                  key={section.id}
-                  ref={(element) => { sectionRefs.current[index] = element; }}
-                  onClick={() => useTeleprompterStore.getState().setActiveSection(index)}
+                  key={displaySection.section.id}
+                  onClick={() => setActiveSection(sectionIndex)}
                   className={`cursor-pointer whitespace-pre-wrap transition-opacity duration-200 ${
-                    active ? "text-foreground" : "text-foreground/35 hover:text-foreground/55"
+                    active ? "opacity-100" : "opacity-35 hover:opacity-55"
                   }`}
                   style={{ fontSize: `${fontSize}px`, lineHeight }}
                 >
-                  {section.title && (
+                  {displaySection.section.title && (
                     <div className="mb-3 text-[0.42em] font-semibold uppercase tracking-[0.16em] text-primary/60">
-                      {section.title}
+                      {displaySection.section.title}
                     </div>
                   )}
-                  {section.displayText}
+                  {displaySection.pieces.map((piece, pieceIndex) => {
+                    const state = pieceReadingState(piece, cursorTokenIndex);
+                    const isReadingPiece = active && pieceIndex === sectionReadingPieceIndex;
+                    if (!piece.tokenBearing) {
+                      return <span key={`${piece.tokenStart}-${pieceIndex}`}>{piece.text}</span>;
+                    }
+                    const className =
+                      state === "completed"
+                        ? "text-foreground/20 transition-colors duration-200"
+                        : state === "current"
+                          ? "font-medium text-foreground transition-colors duration-150"
+                          : "text-foreground/65 transition-colors duration-200";
+                    return (
+                      <span
+                        key={`${piece.tokenStart}-${pieceIndex}`}
+                        ref={isReadingPiece ? readingPieceRef : undefined}
+                        className={className}
+                      >
+                        {piece.text}
+                      </span>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -244,7 +306,11 @@ export function TeleprompterPanel() {
           Previous
         </button>
         <span className="text-[10px] text-muted-foreground/40">
-          {followingEnabled ? "Speech follow enabled" : "Manual mode"}
+          {followingEnabled
+            ? followerStatus === "uncertain" || followerStatus === "lost"
+              ? "Holding position — keep speaking or use manual navigation"
+              : "Speech controls the reading position"
+            : "Manual override — press Paused to resume following"}
         </span>
         <button
           onClick={nextSection}
