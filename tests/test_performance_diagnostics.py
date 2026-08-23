@@ -13,6 +13,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+# The repository's legacy regression gate executes each test file directly, so
+# project imports intentionally follow the source-path setup above.
+# ruff: noqa: E402
 from hearsay.config import AppConfig
 from hearsay.diagnostics.performance import (
     DiagnosticObservation,
