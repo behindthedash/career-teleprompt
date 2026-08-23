@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from hearsay.transcription.gpu_runtime import activate_gpu_runtime
 from hearsay.transcription.model_manager import load_model_with_repair
 
 log = logging.getLogger(__name__)
@@ -53,6 +54,11 @@ class TranscriptionEngine:
             self.device,
             self.compute_type,
         )
+        if self.device == "cuda":
+            # Prefer Hearsay's optional app-local NVIDIA runtime when installed.
+            # If absent, faster-whisper may still use a compatible system-wide
+            # CUDA/cuDNN installation already present on the machine.
+            activate_gpu_runtime()
         self._model = load_model_with_repair(
             self.model_name,
             device=self.device,
