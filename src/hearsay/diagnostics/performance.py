@@ -168,9 +168,7 @@ class DiagnosticResult:
         if self.aggregate is not None:
             aggregate = data["aggregate"]
             assert isinstance(aggregate, dict)
-            aggregate["effective_audio_minutes"] = round(
-                self.aggregate.effective_audio_s / 60.0, 3
-            )
+            aggregate["effective_audio_minutes"] = round(self.aggregate.effective_audio_s / 60.0, 3)
         return data
 
 
