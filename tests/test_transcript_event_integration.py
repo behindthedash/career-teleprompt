@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import queue
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from hearsay.app import HearsayApp
 from hearsay.constants import AUDIO_SOURCE_MIC, AUDIO_SOURCE_SYSTEM, LIVE_VIEW_POLL_MS
@@ -15,7 +18,9 @@ class RecordingDispatcher:
         self.published: list[tuple[str, TranscriptionResult]] = []
         self.ended: list[str | None] = []
 
-    def publish_result(self, session_id: str, result: TranscriptionResult) -> tuple[()]:
+    def publish_result(
+        self, session_id: str, result: TranscriptionResult
+    ) -> tuple[object, ...]:
         self.published.append((session_id, result))
         return ()
 
