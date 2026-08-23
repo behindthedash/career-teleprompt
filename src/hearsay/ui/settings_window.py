@@ -95,9 +95,9 @@ class SettingsWindow(ctk.CTkToplevel):
             (AUDIO_SOURCE_MIC, "Microphone"),
             (AUDIO_SOURCE_BOTH, "Both"),
         ]:
-            ctk.CTkRadioButton(
-                scroll, text=label, variable=self._source_var, value=value
-            ).pack(anchor="w", padx=15, pady=2)
+            ctk.CTkRadioButton(scroll, text=label, variable=self._source_var, value=value).pack(
+                anchor="w", padx=15, pady=2
+            )
 
         # ── Microphone device ──
         ctk.CTkLabel(scroll, text="Microphone", font=("Segoe UI", 14, "bold")).pack(
@@ -107,9 +107,9 @@ class SettingsWindow(ctk.CTkToplevel):
             self._config.mic_device_name, _safe_device_names(list_input_devices)
         )
         self._mic_var = ctk.StringVar(value=mic_initial)
-        ctk.CTkOptionMenu(
-            scroll, variable=self._mic_var, values=mic_choices, width=360
-        ).pack(anchor="w", padx=15)
+        ctk.CTkOptionMenu(scroll, variable=self._mic_var, values=mic_choices, width=360).pack(
+            anchor="w", padx=15
+        )
 
         # ── System audio device ──
         ctk.CTkLabel(scroll, text="System Audio Device", font=("Segoe UI", 14, "bold")).pack(
@@ -119,9 +119,9 @@ class SettingsWindow(ctk.CTkToplevel):
             self._config.loopback_device_name, _safe_device_names(list_loopback_devices)
         )
         self._sys_var = ctk.StringVar(value=sys_initial)
-        ctk.CTkOptionMenu(
-            scroll, variable=self._sys_var, values=sys_choices, width=360
-        ).pack(anchor="w", padx=15)
+        ctk.CTkOptionMenu(scroll, variable=self._sys_var, values=sys_choices, width=360).pack(
+            anchor="w", padx=15
+        )
 
         # ── Model ──
         ctk.CTkLabel(scroll, text="Whisper Model", font=("Segoe UI", 14, "bold")).pack(
@@ -154,12 +154,12 @@ class SettingsWindow(ctk.CTkToplevel):
             anchor="w", pady=(15, 5)
         )
         self._device_var = ctk.StringVar(value=self._config.device)
-        ctk.CTkRadioButton(
-            scroll, text="CPU", variable=self._device_var, value="cpu"
-        ).pack(anchor="w", padx=15, pady=2)
-        ctk.CTkRadioButton(
-            scroll, text="CUDA (GPU)", variable=self._device_var, value="cuda"
-        ).pack(anchor="w", padx=15, pady=2)
+        ctk.CTkRadioButton(scroll, text="CPU", variable=self._device_var, value="cpu").pack(
+            anchor="w", padx=15, pady=2
+        )
+        ctk.CTkRadioButton(scroll, text="CUDA (GPU)", variable=self._device_var, value="cuda").pack(
+            anchor="w", padx=15, pady=2
+        )
 
         # ── Language ──
         ctk.CTkLabel(scroll, text="Language", font=("Segoe UI", 14, "bold")).pack(
@@ -169,8 +169,10 @@ class SettingsWindow(ctk.CTkToplevel):
         self._lang_entry = ctk.CTkEntry(scroll, textvariable=self._lang_var, width=100)
         self._lang_entry.pack(anchor="w", padx=15)
         ctk.CTkLabel(
-            scroll, text="ISO 639-1 code (e.g., en, es, fr) or empty for auto-detect",
-            font=("Segoe UI", 10), text_color="gray"
+            scroll,
+            text="ISO 639-1 code (e.g., en, es, fr) or empty for auto-detect",
+            font=("Segoe UI", 10),
+            text_color="gray",
         ).pack(anchor="w", padx=15)
 
         # ── VAD ──
@@ -187,23 +189,20 @@ class SettingsWindow(ctk.CTkToplevel):
         dir_frame.pack(fill="x", padx=15, pady=2)
 
         self._dir_var = ctk.StringVar(value=self._config.output_dir)
-        ctk.CTkEntry(
-            dir_frame, textvariable=self._dir_var, width=350, font=("Consolas", 11)
-        ).pack(side="left", padx=(0, 5))
-        ctk.CTkButton(
-            dir_frame, text="Browse", width=70, command=self._browse
-        ).pack(side="left")
+        ctk.CTkEntry(dir_frame, textvariable=self._dir_var, width=350, font=("Consolas", 11)).pack(
+            side="left", padx=(0, 5)
+        )
+        ctk.CTkButton(dir_frame, text="Browse", width=70, command=self._browse).pack(side="left")
 
         # ── Buttons ──
         btn_frame = ctk.CTkFrame(self)
         btn_frame.pack(fill="x", padx=20, pady=(0, 15))
 
+        ctk.CTkButton(btn_frame, text="Save", width=100, command=self._save).pack(
+            side="right", padx=5
+        )
         ctk.CTkButton(
-            btn_frame, text="Save", width=100, command=self._save
-        ).pack(side="right", padx=5)
-        ctk.CTkButton(
-            btn_frame, text="Cancel", width=100, fg_color="gray",
-            command=self._cancel
+            btn_frame, text="Cancel", width=100, fg_color="gray", command=self._cancel
         ).pack(side="right", padx=5)
 
     def _browse(self) -> None:

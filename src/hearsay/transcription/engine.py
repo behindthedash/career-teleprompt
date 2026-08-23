@@ -88,11 +88,13 @@ class TranscriptionEngine:
         segments = []
         texts = []
         for seg in segments_iter:
-            segments.append({
-                "start": seg.start,
-                "end": seg.end,
-                "text": seg.text.strip(),
-            })
+            segments.append(
+                {
+                    "start": seg.start,
+                    "end": seg.end,
+                    "text": seg.text.strip(),
+                }
+            )
             texts.append(seg.text.strip())
 
         full_text = " ".join(texts)

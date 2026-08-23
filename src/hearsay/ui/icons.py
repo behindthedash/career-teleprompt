@@ -20,8 +20,7 @@ def _create_icon(color: tuple[int, int, int], size: int = 64) -> Image.Image:
     # Inner highlight
     highlight_margin = size // 4
     draw.ellipse(
-        [highlight_margin, highlight_margin,
-         size - highlight_margin, size - highlight_margin],
+        [highlight_margin, highlight_margin, size - highlight_margin, size - highlight_margin],
         fill=(255, 255, 255, 60),
     )
     return img

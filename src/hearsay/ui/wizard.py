@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import logging
 import threading
-from pathlib import Path
 from tkinter import filedialog
 
 import customtkinter as ctk
 
 from hearsay.audio.devices import list_input_devices, list_loopback_devices
-from hearsay.config import AppConfig, ConfigManager
+from hearsay.config import ConfigManager
 from hearsay.constants import (
     APP_NAME,
     AUDIO_SOURCE_BOTH,
@@ -21,7 +20,6 @@ from hearsay.constants import (
 from hearsay.transcription.gpu_detect import GPUInfo, detect_gpu
 from hearsay.transcription.model_manager import download_model
 from hearsay.ui.window_icon import apply_window_icon
-from hearsay.utils.paths import get_default_output_dir
 
 log = logging.getLogger(__name__)
 
@@ -183,7 +181,11 @@ class SetupWizard(ctk.CTkToplevel):
         self._source_var = ctk.StringVar(value=self._config.audio_source)
 
         options = [
-            (AUDIO_SOURCE_SYSTEM, "System Audio", "Record what your speakers play (YouTube, Teams, etc.)"),
+            (
+                AUDIO_SOURCE_SYSTEM,
+                "System Audio",
+                "Record what your speakers play (YouTube, Teams, etc.)",
+            ),
             (AUDIO_SOURCE_MIC, "Microphone", "Record from your microphone"),
             (AUDIO_SOURCE_BOTH, "Both", "Mix system audio and microphone together"),
         ]
@@ -220,7 +222,9 @@ class SetupWizard(ctk.CTkToplevel):
         the container and destroys the widget/variable.
         """
         ctk.CTkLabel(
-            self._container, text=title, font=("Segoe UI", 12, "bold"),
+            self._container,
+            text=title,
+            font=("Segoe UI", 12, "bold"),
         ).pack(anchor="w", padx=10, pady=(8, 0))
         try:
             names = [d.name for d in list_fn()]
@@ -234,10 +238,11 @@ class SetupWizard(ctk.CTkToplevel):
         initial = current if current in names else self._AUTO_DEVICE
         var = ctk.StringVar(value=initial)
         ctk.CTkOptionMenu(
-            self._container, variable=var, values=choices, width=360,
-            command=lambda choice: setattr(
-                self._config, config_attr, mapping.get(choice, "")
-            ),
+            self._container,
+            variable=var,
+            values=choices,
+            width=360,
+            command=lambda choice: setattr(self._config, config_attr, mapping.get(choice, "")),
         ).pack(anchor="w", padx=10, pady=(0, 4))
 
     # ── Screen 3: Output Directory ──
@@ -329,11 +334,15 @@ class SetupWizard(ctk.CTkToplevel):
         try:
             download_model(self._config.model_name, progress_callback=update_status)
             self.after(0, self._download_complete)
-        except Exception as e:
+        except Exception as exc:
             log.error("Model download failed", exc_info=True)
-            self.after(0, lambda: self._dl_status.configure(
-                text=f"Download failed: {e}", text_color="red"
-            ))
+            error_message = f"Download failed: {exc}"
+            self.after(
+                0,
+                lambda message=error_message: self._dl_status.configure(
+                    text=message, text_color="red"
+                ),
+            )
             self.after(0, lambda: self._next_btn.configure(state="normal"))
 
     def _download_complete(self) -> None:
@@ -383,7 +392,9 @@ class SetupWizard(ctk.CTkToplevel):
 
     def _finish(self) -> None:
         # Save config
-        self._config.output_dir = getattr(self, "_dir_var", ctk.StringVar(value=self._config.output_dir)).get()
+        self._config.output_dir = getattr(
+            self, "_dir_var", ctk.StringVar(value=self._config.output_dir)
+        ).get()
         self._config.setup_complete = True
         self._config_manager.save()
         log.info("Setup wizard completed")

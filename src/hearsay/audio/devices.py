@@ -25,9 +25,7 @@ class AudioDevice:
     is_loopback: bool
 
 
-def match_device_by_name(
-    name: str, devices: list[AudioDevice]
-) -> AudioDevice | None:
+def match_device_by_name(name: str, devices: list[AudioDevice]) -> AudioDevice | None:
     """Find the device whose name best matches *name*.
 
     Config stores device *names*, not indices: indices are unstable across
@@ -52,6 +50,7 @@ def match_device_by_name(
 
 # ── Loopback (system audio) devices — via PyAudioWPatch / WASAPI ──────────
 
+
 def list_loopback_devices() -> list[AudioDevice]:
     """Return WASAPI loopback devices (system audio capture)."""
     import pyaudiowpatch as pyaudio
@@ -62,13 +61,15 @@ def list_loopback_devices() -> list[AudioDevice]:
         for i in range(p.get_device_count()):
             dev = p.get_device_info_by_index(i)
             if dev.get("isLoopbackDevice"):
-                devices.append(AudioDevice(
-                    index=dev["index"],
-                    name=dev["name"],
-                    channels=dev["maxInputChannels"],
-                    sample_rate=int(dev["defaultSampleRate"]),
-                    is_loopback=True,
-                ))
+                devices.append(
+                    AudioDevice(
+                        index=dev["index"],
+                        name=dev["name"],
+                        channels=dev["maxInputChannels"],
+                        sample_rate=int(dev["defaultSampleRate"]),
+                        is_loopback=True,
+                    )
+                )
     finally:
         p.terminate()
     log.debug("Found %d loopback devices", len(devices))
@@ -82,15 +83,10 @@ def get_default_loopback() -> AudioDevice | None:
     p = pyaudio.PyAudio()
     try:
         wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
-        default_speakers = p.get_device_info_by_index(
-            wasapi_info["defaultOutputDevice"]
-        )
+        default_speakers = p.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
         for i in range(p.get_device_count()):
             dev = p.get_device_info_by_index(i)
-            if (
-                dev.get("isLoopbackDevice")
-                and dev["name"].startswith(default_speakers["name"])
-            ):
+            if dev.get("isLoopbackDevice") and dev["name"].startswith(default_speakers["name"]):
                 return AudioDevice(
                     index=dev["index"],
                     name=dev["name"],
@@ -118,6 +114,7 @@ def resolve_loopback(name: str) -> AudioDevice | None:
 
 # ── Microphone / input devices — via sounddevice / WASAPI ─────────────────
 
+
 def _wasapi_hostapi_index(sd) -> int | None:
     """Return sounddevice's host-API index for WASAPI, or None if absent."""
     try:
@@ -144,13 +141,15 @@ def list_input_devices() -> list[AudioDevice]:
         if dev["name"] in seen:
             continue
         seen.add(dev["name"])
-        devices.append(AudioDevice(
-            index=i,
-            name=dev["name"],
-            channels=dev["max_input_channels"],
-            sample_rate=int(dev["default_samplerate"]),
-            is_loopback=False,
-        ))
+        devices.append(
+            AudioDevice(
+                index=i,
+                name=dev["name"],
+                channels=dev["max_input_channels"],
+                sample_rate=int(dev["default_samplerate"]),
+                is_loopback=False,
+            )
+        )
     log.debug("Found %d WASAPI input devices", len(devices))
     return devices
 

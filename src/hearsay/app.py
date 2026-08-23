@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 import queue
-import subprocess
 import threading
 import time
 
@@ -23,8 +22,8 @@ from hearsay.ui.live_view import LiveTranscriptWindow
 from hearsay.ui.settings_window import SettingsWindow
 from hearsay.ui.theme import apply_theme
 from hearsay.ui.tray import SystemTrayIcon
-from hearsay.ui.wizard import SetupWizard
 from hearsay.ui.window_icon import apply_window_icon
+from hearsay.ui.wizard import SetupWizard
 from hearsay.utils.threading_utils import safe_after
 
 log = logging.getLogger(__name__)
@@ -216,8 +215,7 @@ class HearsayApp:
         log.error("Recording session failed — stopping it")
         if self._tray:
             self._tray.notify(
-                "Recording failed — no audio is being captured. "
-                "The session has been stopped."
+                "Recording failed — no audio is being captured. The session has been stopped."
             )
         if self._live_view:
             self._live_view.set_status("Recording FAILED — session stopped")
@@ -265,9 +263,11 @@ class HearsayApp:
             self._tray.set_recording(False)
 
         # Update live view status immediately
-        safe_after(self._root, 0, lambda: (
-            self._live_view.set_status("Saving...") if self._live_view else None
-        ))
+        safe_after(
+            self._root,
+            0,
+            lambda: self._live_view.set_status("Saving...") if self._live_view else None,
+        )
 
         # Capture references for the background thread (including the queue —
         # by the time teardown drains it, self._transcript_queue may already
@@ -346,11 +346,13 @@ class HearsayApp:
                     if self._live_view:
                         for seg in result.segments:
                             line = self._format_live_line(result, seg)
-                            safe_after(self._root, 0,
-                                       lambda t=line: (
-                                           self._live_view.append_text(t)
-                                           if self._live_view else None
-                                       ))
+                            safe_after(
+                                self._root,
+                                0,
+                                lambda t=line: (
+                                    self._live_view.append_text(t) if self._live_view else None
+                                ),
+                            )
             except queue.Empty:
                 pass
 
@@ -364,10 +366,15 @@ class HearsayApp:
             log.info("Transcript saved to %s", path)
 
             # Post-process: clean up fillers, duplicates, whitespace
-            safe_after(self._root, 0, lambda: (
-                self._live_view.set_status("Formatting transcript...")
-                if self._live_view else None
-            ))
+            safe_after(
+                self._root,
+                0,
+                lambda: (
+                    self._live_view.set_status("Formatting transcript...")
+                    if self._live_view
+                    else None
+                ),
+            )
             writer.post_process()
 
             if not writer.body_written:
@@ -380,14 +387,16 @@ class HearsayApp:
 
         # Insert session separator in live view
         end_time = time.strftime("%I:%M %p")
-        safe_after(self._root, 0, lambda: (
-            self._live_view.append_separator(end_time) if self._live_view else None
-        ))
+        safe_after(
+            self._root,
+            0,
+            lambda: self._live_view.append_separator(end_time) if self._live_view else None,
+        )
 
         # Update live view
-        safe_after(self._root, 0, lambda: (
-            self._live_view.set_status("Idle") if self._live_view else None
-        ))
+        safe_after(
+            self._root, 0, lambda: self._live_view.set_status("Idle") if self._live_view else None
+        )
 
     @staticmethod
     def _format_live_line(result, seg: dict) -> str:
@@ -412,9 +421,7 @@ class HearsayApp:
                 # Update live view
                 if self._live_view:
                     for seg in result.segments:
-                        self._live_view.append_text(
-                            self._format_live_line(result, seg)
-                        )
+                        self._live_view.append_text(self._format_live_line(result, seg))
         except queue.Empty:
             pass
 
@@ -465,8 +472,11 @@ class HearsayApp:
             self._recording = False
             self._session_gen += 1
             self._teardown_recording(
-                self._recorder, self._pipeline, self._engine,
-                self._writer, self._recording_start_time,
+                self._recorder,
+                self._pipeline,
+                self._engine,
+                self._writer,
+                self._recording_start_time,
                 self._transcript_queue,
             )
             self._recorder = None
