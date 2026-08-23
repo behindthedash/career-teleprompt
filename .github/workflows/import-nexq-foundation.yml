@@ -1,0 +1,92 @@
+name: Import pinned NexQ foundation
+
+on:
+  push:
+    branches:
+      - foundation/import-nexq
+    paths:
+      - .github/workflows/import-nexq-foundation.yml
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Career Teleprompt
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout pinned NexQ baseline
+        run: |
+          git clone https://github.com/naxhq/NexQ.git /tmp/nexq
+          git -C /tmp/nexq checkout 1ce1524c122df509f231c521a07ada95bfde2d88
+          test "$(git -C /tmp/nexq rev-parse HEAD)" = "1ce1524c122df509f231c521a07ada95bfde2d88"
+
+      - name: Preserve migration artifacts and replace runtime foundation
+        shell: bash
+        run: |
+          set -euo pipefail
+          find . -mindepth 1 -maxdepth 1 \
+            ! -name .git \
+            ! -name openspec \
+            ! -name docs \
+            -exec rm -rf {} +
+
+          rsync -a /tmp/nexq/ ./ \
+            --exclude .git \
+            --exclude .planning \
+            --exclude .playwright-mcp \
+            --exclude website \
+            --exclude .github/workflows/deploy-website.yml \
+            --exclude .github/workflows/release.yml
+
+          # Career Teleprompt develops against dev; upstream NexQ targets main.
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/ci.yml')
+          text = p.read_text()
+          text = text.replace('branches: [main]', 'branches: [dev]')
+          p.write_text(text)
+          PY
+
+          cat > docs/FOUNDATION_MIGRATION.md <<'EOF'
+          # Foundation migration
+
+          The active application foundation in this branch is imported from NexQ commit
+          `1ce1524c122df509f231c521a07ada95bfde2d88`.
+
+          The pre-pivot Python Hearsay implementation remains recoverable in Git history.
+          OpenSpec artifacts and Career Teleprompt migration documentation are retained across
+          the foundation replacement.
+
+          Upstream deployment/release workflows and the NexQ marketing website are intentionally
+          not imported. Career Teleprompt will define its own release/branding flow after the
+          runtime foundation is validated.
+          EOF
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Frontend production build
+        run: npm run build
+
+      - name: Rust check (Linux foundation sanity)
+        run: cargo check
+        working-directory: src-tauri
+
+      - name: Commit imported foundation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: import pinned NexQ application foundation"
+          git push origin HEAD:foundation/import-nexq
