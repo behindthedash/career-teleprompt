@@ -12,4 +12,5 @@
 
 ## 4. Validation
 - [x] 4.1 Regression-test normal 30s behavior.
-- [ ] 4.2 Profile initial 4s/1s live mode on Windows CPU/GPU configurations.
+- [x] 4.2 Add a reproducible content-free report harness for live-session RTF/backlog profiling.
+- [ ] 4.3 Run representative several-minute live profiling on Windows CPU and NVIDIA GPU configurations and record the result summaries.
