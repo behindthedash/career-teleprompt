@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   loadPreparedDocument,
+  promoteGeneratedDocumentToPrepared,
   type TeleprompterDocument,
   type TeleprompterFormat,
 } from "../teleprompter/content";
@@ -31,6 +32,7 @@ interface TeleprompterState {
   setDraftText: (text: string) => void;
   setPreparedText: (text: string, format?: TeleprompterFormat, sourceUri?: string) => void;
   setDocument: (document: TeleprompterDocument) => void;
+  saveCurrentAsPrepared: () => void;
   clearDocument: () => void;
   beginEditing: () => void;
   cancelEditing: () => void;
@@ -99,6 +101,17 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
       followingEnabled: true,
       ...followerReset,
     }),
+
+  saveCurrentAsPrepared: () => {
+    const current = get().document;
+    if (!current || current.origin !== "generated") return;
+
+    const document = promoteGeneratedDocumentToPrepared(current);
+    set({
+      document,
+      draftText: document.sections.map((section) => section.displayText).join("\n\n"),
+    });
+  },
 
   clearDocument: () =>
     set({
