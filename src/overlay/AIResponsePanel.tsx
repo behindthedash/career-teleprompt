@@ -8,12 +8,21 @@ import {
   Copy,
   Check,
   Globe,
+  BookOpenText,
+  type LucideIcon,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getModeLabel } from "../lib/utils";
 import type { AIResponse, StreamSource } from "../lib/types";
 import { useConfigStore } from "../stores/configStore";
+import { useTeleprompterStore } from "../stores/teleprompterStore";
+import { useOverlayLayoutStore } from "../stores/overlayLayoutStore";
+import { showToast } from "../stores/toastStore";
+import {
+  isPromptableAIResponse,
+  teleprompterDocumentFromAIResponse,
+} from "../teleprompter/handoff";
 import { ColorPickerButton } from "../components/ColorPickerButton";
 
 type TabId = "current" | "history-0" | "history-1" | string;
@@ -54,14 +63,12 @@ export function AIResponsePanel() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll during streaming
   useEffect(() => {
     if (isStreaming && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [currentContent, isStreaming]);
 
-  // Switch to "current" tab when a new stream starts
   useEffect(() => {
     if (isStreaming) {
       setActiveTab("current");
@@ -78,27 +85,46 @@ export function AIResponsePanel() {
         // Clipboard access may fail in some contexts
       }
     },
-    []
+    [],
   );
 
   const handlePin = useCallback(
     (id: string) => {
-      const isPinned = pinnedResponses.some((r) => r.id === id);
+      const isPinned = pinnedResponses.some((response) => response.id === id);
       if (isPinned) {
         unpinResponse(id);
       } else {
         pinResponse(id);
       }
     },
-    [pinnedResponses, pinResponse, unpinResponse]
+    [pinnedResponses, pinResponse, unpinResponse],
   );
 
-  // Build tab list: Current + previous history + pinned
-  const previousResponses = responseHistory.slice(0, 4);
-  const hasTabs =
-    previousResponses.length > 0 || pinnedResponses.length > 0;
+  const handlePrompt = useCallback((response: AIResponse) => {
+    if (!isPromptableAIResponse(response)) return;
+    try {
+      const document = teleprompterDocumentFromAIResponse(response);
+      useTeleprompterStore.getState().setDocument(document);
+      useOverlayLayoutStore.getState().setLayoutMode("teleprompt");
+      showToast("AI answer loaded into teleprompter", "success");
+    } catch (promptError) {
+      showToast(
+        promptError instanceof Error ? promptError.message : "Couldn't load AI answer into teleprompter",
+        "error",
+      );
+    }
+  }, []);
 
-  // Error state
+  const previousResponses = responseHistory.slice(0, 4);
+  const hasTabs = previousResponses.length > 0 || pinnedResponses.length > 0;
+  const currentResponse =
+    !isStreaming &&
+    responseHistory[0] &&
+    responseHistory[0].content === currentContent &&
+    responseHistory[0].mode === currentMode
+      ? responseHistory[0]
+      : null;
+
   if (error) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2">
@@ -107,210 +133,232 @@ export function AIResponsePanel() {
     );
   }
 
-  // Determine what content to show based on active tab
   let displayContent: string | null = null;
   let displayResponse: AIResponse | null = null;
 
   if (activeTab === "current") {
     displayContent = currentContent || null;
   } else if (activeTab.startsWith("history-")) {
-    const idx = parseInt(activeTab.replace("history-", ""), 10);
-    displayResponse = previousResponses[idx] || null;
+    const index = parseInt(activeTab.replace("history-", ""), 10);
+    displayResponse = previousResponses[index] || null;
     displayContent = displayResponse?.content || null;
   } else if (activeTab.startsWith("pinned-")) {
     const pinnedId = activeTab.replace("pinned-", "");
-    displayResponse = pinnedResponses.find((r) => r.id === pinnedId) || null;
+    displayResponse = pinnedResponses.find((response) => response.id === pinnedId) || null;
     displayContent = displayResponse?.content || null;
   }
 
   return (
     <div className="flex flex-1 min-h-0 flex-col">
-      {/* Tabs row */}
       {hasTabs && (
-        <div className="mb-2 flex shrink-0 items-center gap-1.5 overflow-x-auto pb-1.5" role="tablist" aria-label="AI response tabs">
-          <TabButton
-            label="Current"
-            active={activeTab === "current"}
-            onClick={() => setActiveTab("current")}
-          />
-          {previousResponses.map((resp, idx) => (
+        <div
+          className="mb-2 flex shrink-0 items-center gap-1.5 overflow-x-auto pb-1.5"
+          role="tablist"
+          aria-label="AI response tabs"
+        >
+          <TabButton label="Current" active={activeTab === "current"} onClick={() => setActiveTab("current")} />
+          {previousResponses.map((response, index) => (
             <TabButton
-              key={resp.id}
-              label={getModeLabel(resp.mode)}
-              active={activeTab === `history-${idx}`}
-              onClick={() => setActiveTab(`history-${idx}`)}
+              key={response.id}
+              label={getModeLabel(response.mode)}
+              active={activeTab === `history-${index}`}
+              onClick={() => setActiveTab(`history-${index}`)}
               secondary
             />
           ))}
-          {pinnedResponses.map((resp) => (
+          {pinnedResponses.map((response) => (
             <TabButton
-              key={resp.id}
-              label={`${getModeLabel(resp.mode)}`}
-              active={activeTab === `pinned-${resp.id}`}
-              onClick={() => setActiveTab(`pinned-${resp.id}`)}
+              key={response.id}
+              label={getModeLabel(response.mode)}
+              active={activeTab === `pinned-${response.id}`}
+              onClick={() => setActiveTab(`pinned-${response.id}`)}
               pinned
             />
           ))}
         </div>
       )}
 
-      {/* Content area */}
       <div className="relative flex-1 min-h-0">
-      <div ref={scrollRef} className="absolute inset-0 overflow-y-auto" role="tabpanel" aria-label="AI response content">
-        {/* Active streaming state */}
-        {activeTab === "current" && isStreaming && (
-          <div className="space-y-2.5" aria-live="polite" aria-atomic="false">
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-3 w-3 animate-spin text-primary/50" />
-              <span className="text-meta font-medium text-primary">
-                {currentMode ? getModeLabel(currentMode) : "Generating"}...
-              </span>
+        <div
+          ref={scrollRef}
+          className="absolute inset-0 overflow-y-auto"
+          role="tabpanel"
+          aria-label="AI response content"
+        >
+          {activeTab === "current" && isStreaming && (
+            <div className="space-y-2.5" aria-live="polite" aria-atomic="false">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-3 w-3 animate-spin text-primary/50" />
+                <span className="text-meta font-medium text-primary">
+                  {currentMode ? getModeLabel(currentMode) : "Generating"}...
+                </span>
+              </div>
+              <div className="prose prose-sm prose-invert max-w-none leading-relaxed" style={proseStyle}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{currentContent}</ReactMarkdown>
+                <span className="inline-block h-3 w-0.5 animate-pulse bg-primary/60 ml-0.5" />
+              </div>
             </div>
-            <div className="prose prose-sm prose-invert max-w-none leading-relaxed" style={proseStyle}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {currentContent}
-              </ReactMarkdown>
-              <span className="inline-block h-3 w-0.5 animate-pulse bg-primary/60 ml-0.5" />
-            </div>
-          </div>
-        )}
+          )}
 
-        {/* Finished current content (not streaming) */}
-        {activeTab === "current" && !isStreaming && currentContent && (
-          <div className="space-y-2.5">
-            {currentMode && (
+          {activeTab === "current" && !isStreaming && currentContent && (
+            <div className="space-y-2.5">
+              {currentMode && (
+                <div className="flex items-center justify-between">
+                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-meta font-medium text-primary/80">
+                    {getModeLabel(currentMode)}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {currentResponse && isPromptableAIResponse(currentResponse) && (
+                      <PromptButton onClick={() => handlePrompt(currentResponse)} />
+                    )}
+                    <ActionButton
+                      icon={copiedId === "current" ? Check : Copy}
+                      title="Copy to clipboard"
+                      onClick={() => handleCopy(currentContent, "current")}
+                      active={copiedId === "current"}
+                    />
+                    {currentResponse && (
+                      <ActionButton
+                        icon={pinnedResponses.some((response) => response.id === currentResponse.id) ? PinOff : Pin}
+                        title={
+                          pinnedResponses.some((response) => response.id === currentResponse.id)
+                            ? "Unpin"
+                            : "Pin response"
+                        }
+                        onClick={() => handlePin(currentResponse.id)}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="prose prose-sm prose-invert max-w-none leading-relaxed" style={proseStyle}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{currentContent}</ReactMarkdown>
+              </div>
+              <SourcesList sources={currentSources} />
+            </div>
+          )}
+
+          {activeTab !== "current" && displayContent && displayResponse && (
+            <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-meta font-medium text-primary/80">
-                  {getModeLabel(currentMode)}
+                  {getModeLabel(displayResponse.mode)}
                 </span>
                 <div className="flex items-center gap-1">
-                  <ActionButton
-                    icon={copiedId === "current" ? Check : Copy}
-                    title="Copy to clipboard"
-                    onClick={() => handleCopy(currentContent, "current")}
-                    active={copiedId === "current"}
-                  />
-                  {responseHistory.length > 0 && responseHistory[0] && (
-                    <ActionButton
-                      icon={
-                        pinnedResponses.some(
-                          (r) => r.id === responseHistory[0].id
-                        )
-                          ? PinOff
-                          : Pin
-                      }
-                      title={
-                        pinnedResponses.some(
-                          (r) => r.id === responseHistory[0].id
-                        )
-                          ? "Unpin"
-                          : "Pin response"
-                      }
-                      onClick={() => handlePin(responseHistory[0].id)}
-                    />
+                  {isPromptableAIResponse(displayResponse) && (
+                    <PromptButton onClick={() => handlePrompt(displayResponse!)} />
                   )}
+                  <ActionButton
+                    icon={copiedId === displayResponse.id ? Check : Copy}
+                    title="Copy to clipboard"
+                    onClick={() => handleCopy(displayContent!, displayResponse!.id)}
+                    active={copiedId === displayResponse.id}
+                  />
+                  <ActionButton
+                    icon={pinnedResponses.some((response) => response.id === displayResponse!.id) ? PinOff : Pin}
+                    title={
+                      pinnedResponses.some((response) => response.id === displayResponse!.id)
+                        ? "Unpin"
+                        : "Pin response"
+                    }
+                    onClick={() => handlePin(displayResponse!.id)}
+                  />
                 </div>
               </div>
-            )}
-            <div className="prose prose-sm prose-invert max-w-none leading-relaxed" style={proseStyle}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {currentContent}
-              </ReactMarkdown>
-            </div>
-            <SourcesList sources={currentSources} />
-          </div>
-        )}
-
-        {/* History / pinned tab content */}
-        {activeTab !== "current" && displayContent && displayResponse && (
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-meta font-medium text-primary/80">
-                {getModeLabel(displayResponse.mode)}
-              </span>
-              <div className="flex items-center gap-1">
-                <ActionButton
-                  icon={copiedId === displayResponse.id ? Check : Copy}
-                  title="Copy to clipboard"
-                  onClick={() =>
-                    handleCopy(displayContent!, displayResponse!.id)
-                  }
-                  active={copiedId === displayResponse.id}
-                />
-                <ActionButton
-                  icon={
-                    pinnedResponses.some((r) => r.id === displayResponse!.id)
-                      ? PinOff
-                      : Pin
-                  }
-                  title={
-                    pinnedResponses.some((r) => r.id === displayResponse!.id)
-                      ? "Unpin"
-                      : "Pin response"
-                  }
-                  onClick={() => handlePin(displayResponse!.id)}
-                />
+              <div className="prose prose-sm prose-invert max-w-none leading-relaxed" style={proseStyle}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayContent}</ReactMarkdown>
               </div>
+              <SourcesList sources={displayResponse.sources} />
             </div>
-            <div className="prose prose-sm prose-invert max-w-none leading-relaxed" style={proseStyle}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {displayContent}
-              </ReactMarkdown>
-            </div>
-            <SourcesList sources={displayResponse.sources} />
-          </div>
-        )}
+          )}
 
-        {/* Empty state */}
-        {activeTab === "current" && !isStreaming && !currentContent && (
-          <div className="flex h-full flex-col items-center justify-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary/30" />
-            <p className="text-xs text-muted-foreground/50">
-              Press <kbd className="mx-0.5 rounded border border-border/30 bg-secondary/30 px-1.5 py-0.5 font-mono text-meta text-foreground/70">Space</kbd> for AI assistance
-            </p>
-          </div>
-        )}
-      </div>
+          {activeTab === "current" && !isStreaming && !currentContent && (
+            <div className="flex h-full flex-col items-center justify-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary/30" />
+              <p className="text-xs text-muted-foreground/50">
+                Press{" "}
+                <kbd className="mx-0.5 rounded border border-border/30 bg-secondary/30 px-1.5 py-0.5 font-mono text-meta text-foreground/70">
+                  Space
+                </kbd>{" "}
+                for AI assistance
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Typeset controls */}
       <div className="flex shrink-0 flex-col gap-1 border-t border-border/10 px-1 pt-1.5">
-        {/* Row 1: font size + color */}
         <div className="flex items-center gap-3">
           <span className="text-[0.6rem] uppercase tracking-widest text-muted-foreground/40 font-medium">AI Text</span>
           <div className="flex items-center gap-1">
-            <button onClick={() => setAiResponseFontSize(Math.max(8, aiResponseFontSize - 1))} className="h-5 w-5 flex items-center justify-center rounded text-[0.6rem] text-muted-foreground/50 hover:bg-accent/40 hover:text-foreground/70 transition-colors" title="Smaller">A</button>
+            <button
+              onClick={() => setAiResponseFontSize(Math.max(8, aiResponseFontSize - 1))}
+              className="h-5 w-5 flex items-center justify-center rounded text-[0.6rem] text-muted-foreground/50 hover:bg-accent/40 hover:text-foreground/70 transition-colors"
+              title="Smaller"
+            >
+              A
+            </button>
             <span className="text-[0.6rem] tabular-nums text-muted-foreground/50 w-6 text-center">{aiResponseFontSize}</span>
-            <button onClick={() => setAiResponseFontSize(Math.min(32, aiResponseFontSize + 1))} className="h-5 w-5 flex items-center justify-center rounded text-[0.75rem] font-medium text-muted-foreground/50 hover:bg-accent/40 hover:text-foreground/70 transition-colors" title="Larger">A</button>
+            <button
+              onClick={() => setAiResponseFontSize(Math.min(32, aiResponseFontSize + 1))}
+              className="h-5 w-5 flex items-center justify-center rounded text-[0.75rem] font-medium text-muted-foreground/50 hover:bg-accent/40 hover:text-foreground/70 transition-colors"
+              title="Larger"
+            >
+              A
+            </button>
           </div>
           <ColorPickerButton value={aiResponseTextColor} onChange={setAiResponseTextColor} label="AI text color" />
         </div>
-        {/* Row 2: line height + horizontal padding + text align */}
         <div className="flex items-center gap-3">
-          {/* Line height */}
           <div className="flex items-center gap-1">
             <span className="text-[0.6rem] text-muted-foreground/40">LH</span>
-            <button onClick={() => setAiResponseLineHeight(Math.max(1.0, parseFloat((aiResponseLineHeight - 0.1).toFixed(1))))} className="h-5 w-5 flex items-center justify-center rounded text-[0.65rem] text-muted-foreground/50 hover:bg-accent/40 hover:text-foreground/70 transition-colors" title="Decrease line height">−</button>
+            <button
+              onClick={() => setAiResponseLineHeight(Math.max(1.0, parseFloat((aiResponseLineHeight - 0.1).toFixed(1))))}
+              className="h-5 w-5 flex items-center justify-center rounded text-[0.65rem] text-muted-foreground/50 hover:bg-accent/40 hover:text-foreground/70 transition-colors"
+              title="Decrease line height"
+            >
+              −
+            </button>
             <span className="text-[0.6rem] tabular-nums text-muted-foreground/50 w-6 text-center">{aiResponseLineHeight.toFixed(1)}</span>
-            <button onClick={() => setAiResponseLineHeight(Math.min(3.0, parseFloat((aiResponseLineHeight + 0.1).toFixed(1))))} className="h-5 w-5 flex items-center justify-center rounded text-[0.65rem] text-muted-foreground/50 hover:bg-accent/40 hover:text-foreground/70 transition-colors" title="Increase line height">+</button>
+            <button
+              onClick={() => setAiResponseLineHeight(Math.min(3.0, parseFloat((aiResponseLineHeight + 0.1).toFixed(1))))}
+              className="h-5 w-5 flex items-center justify-center rounded text-[0.65rem] text-muted-foreground/50 hover:bg-accent/40 hover:text-foreground/70 transition-colors"
+              title="Increase line height"
+            >
+              +
+            </button>
           </div>
-          {/* Horizontal padding */}
           <div className="flex items-center gap-1">
             <span className="text-[0.6rem] text-muted-foreground/40">↔</span>
-            <button onClick={() => setAiResponseHPad(Math.max(0, aiResponseHPad - 4))} className="h-5 w-5 flex items-center justify-center rounded text-[0.65rem] text-muted-foreground/50 hover:bg-accent/40 hover:text-foreground/70 transition-colors" title="Decrease margin">−</button>
+            <button
+              onClick={() => setAiResponseHPad(Math.max(0, aiResponseHPad - 4))}
+              className="h-5 w-5 flex items-center justify-center rounded text-[0.65rem] text-muted-foreground/50 hover:bg-accent/40 hover:text-foreground/70 transition-colors"
+              title="Decrease margin"
+            >
+              −
+            </button>
             <span className="text-[0.6rem] tabular-nums text-muted-foreground/50 w-6 text-center">{aiResponseHPad}</span>
-            <button onClick={() => setAiResponseHPad(Math.min(80, aiResponseHPad + 4))} className="h-5 w-5 flex items-center justify-center rounded text-[0.65rem] text-muted-foreground/50 hover:bg-accent/40 hover:text-foreground/70 transition-colors" title="Increase margin">+</button>
+            <button
+              onClick={() => setAiResponseHPad(Math.min(80, aiResponseHPad + 4))}
+              className="h-5 w-5 flex items-center justify-center rounded text-[0.65rem] text-muted-foreground/50 hover:bg-accent/40 hover:text-foreground/70 transition-colors"
+              title="Increase margin"
+            >
+              +
+            </button>
           </div>
-          {/* Text align */}
           <div className="flex items-center gap-0.5 rounded border border-border/20 overflow-hidden">
-            {(["left", "center", "right"] as const).map((a) => (
+            {(["left", "center", "right"] as const).map((align) => (
               <button
-                key={a}
-                onClick={() => setAiResponseAlign(a)}
-                className={`px-1.5 py-0.5 text-[0.6rem] font-medium transition-colors ${aiResponseAlign === a ? "bg-primary/20 text-primary" : "text-muted-foreground/40 hover:text-muted-foreground/70"}`}
-                title={`Align ${a}`}
+                key={align}
+                onClick={() => setAiResponseAlign(align)}
+                className={`px-1.5 py-0.5 text-[0.6rem] font-medium transition-colors ${
+                  aiResponseAlign === align
+                    ? "bg-primary/20 text-primary"
+                    : "text-muted-foreground/40 hover:text-muted-foreground/70"
+                }`}
+                title={`Align ${align}`}
               >
-                {a === "left" ? "L" : a === "center" ? "C" : "R"}
+                {align === "left" ? "L" : align === "center" ? "C" : "R"}
               </button>
             ))}
           </div>
@@ -320,16 +368,14 @@ export function AIResponsePanel() {
   );
 }
 
-// --- Sub-components ---
-
 function SourcesList({ sources }: { sources?: StreamSource[] }) {
   if (!sources || sources.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5 border-t border-border/10 pt-2">
       <Globe className="h-3 w-3 shrink-0 text-muted-foreground/40" aria-hidden="true" />
-      {sources.map((source, idx) => (
+      {sources.map((source, index) => (
         <a
-          key={`${source.url}-${idx}`}
+          key={`${source.url}-${index}`}
           href={source.url}
           target="_blank"
           rel="noopener noreferrer"
@@ -377,13 +423,27 @@ function TabButton({
   );
 }
 
+function PromptButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/20"
+      title="Load this answer into the speech-following teleprompter"
+      aria-label="Prompt this answer"
+    >
+      <BookOpenText className="h-3 w-3" aria-hidden="true" />
+      Prompt
+    </button>
+  );
+}
+
 function ActionButton({
   icon: Icon,
   title,
   onClick,
   active,
 }: {
-  icon: typeof Copy;
+  icon: LucideIcon;
   title: string;
   onClick: () => void;
   active?: boolean;
@@ -397,6 +457,7 @@ function ActionButton({
           : "text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent"
       }`}
       aria-label={title}
+      title={title}
     >
       <Icon className="h-3.5 w-3.5" aria-hidden="true" />
     </button>
