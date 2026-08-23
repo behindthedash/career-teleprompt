@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { teleprompterDocumentFromAIResponse } from "../.tmp-teleprompter-tests/handoff.js";
+import {
+  isPromptableAIResponse,
+  teleprompterDocumentFromAIResponse,
+} from "../.tmp-teleprompter-tests/handoff.js";
 
 const sourced = teleprompterDocumentFromAIResponse({
   id: "response-42",
@@ -36,6 +39,37 @@ assert.deepEqual(providerOnly.evidence, [
     label: "OpenAI / GPT 5.6 Sol",
   },
 ]);
+
+assert.equal(
+  isPromptableAIResponse({
+    id: "response-44",
+    content: "Use this answer.",
+    provider: "openai",
+    model: "gpt",
+    mode: "WhatToSay",
+  }),
+  true,
+);
+assert.equal(
+  isPromptableAIResponse({
+    id: "response-45",
+    content: "Do not promote a recap.",
+    provider: "openai",
+    model: "gpt",
+    mode: "Recap",
+  }),
+  false,
+);
+assert.equal(
+  isPromptableAIResponse({
+    id: "response-46",
+    content: "   ",
+    provider: "openai",
+    model: "gpt",
+    mode: "WhatToSay",
+  }),
+  false,
+);
 
 assert.throws(
   () => teleprompterDocumentFromAIResponse({ id: "", content: "answer", provider: "p", model: "m" }),
