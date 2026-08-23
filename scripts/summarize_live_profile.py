@@ -173,9 +173,7 @@ def summarize_session(
 
     rtfs = sorted(observation.realtime_factor for observation in session.observations)
     audio_total = sum(observation.audio_duration_s for observation in session.observations)
-    processing_total = sum(
-        observation.processing_elapsed_s for observation in session.observations
-    )
+    processing_total = sum(observation.processing_elapsed_s for observation in session.observations)
     healthy = sum(observation.health == "healthy" for observation in session.observations)
     behind = len(session.observations) - healthy
     required_sample_s = minimum_sample_minutes * 60.0
@@ -309,7 +307,9 @@ def _default_log_path() -> Path | None:
 
 
 def _select_live_sessions(sessions: list[ProfileSession]) -> list[ProfileSession]:
-    return [session for session in sessions if session.profile_name == "live" and session.observations]
+    return [
+        session for session in sessions if session.profile_name == "live" and session.observations
+    ]
 
 
 def main() -> int:
