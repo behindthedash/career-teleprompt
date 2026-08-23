@@ -71,16 +71,8 @@ class TranscriptEventDispatcher:
                     chunk_index=result.chunk_index,
                     source=source,
                     text=str(segment.get("text", "")),
-                    start_time=(
-                        result.window_start + float(start)
-                        if start is not None
-                        else None
-                    ),
-                    end_time=(
-                        result.window_start + float(end)
-                        if end is not None
-                        else None
-                    ),
+                    start_time=(result.window_start + float(start) if start is not None else None),
+                    end_time=(result.window_start + float(end) if end is not None else None),
                 )
                 events.append(event)
                 sequence += 1
