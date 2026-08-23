@@ -83,11 +83,15 @@ def detect_gpu() -> GPUInfo:
 def _nvidia_smi_gpu() -> tuple[str, float]:
     """Return (name, vram_gb) from nvidia-smi, or ("", 0.0) if unavailable."""
     try:
-        out = subprocess.check_output(
-            ["nvidia-smi", "--query-gpu=name,memory.total",
-             "--format=csv,noheader,nounits"],
-            encoding="utf-8", timeout=5,
-        ).strip().splitlines()
+        out = (
+            subprocess.check_output(
+                ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+                encoding="utf-8",
+                timeout=5,
+            )
+            .strip()
+            .splitlines()
+        )
         if out:
             name, mib = out[0].split(",")
             return name.strip(), round(float(mib) / 1024, 1)

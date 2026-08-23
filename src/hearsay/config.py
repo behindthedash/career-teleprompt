@@ -54,10 +54,9 @@ class ConfigManager:
         if self.path.exists():
             try:
                 data = json.loads(self.path.read_text(encoding="utf-8"))
-                return AppConfig(**{
-                    k: v for k, v in data.items()
-                    if k in AppConfig.__dataclass_fields__
-                })
+                return AppConfig(
+                    **{k: v for k, v in data.items() if k in AppConfig.__dataclass_fields__}
+                )
             except Exception:
                 log.warning("Failed to load config, using defaults", exc_info=True)
         return AppConfig()

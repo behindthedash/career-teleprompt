@@ -1,0 +1,11 @@
+# hearsay -- worktrail-go policy.
+# See worktrail's src/worktrail/router/policy.py DEFAULTS for the full
+# schema. Every key is optional and defaults to a safe, do-nothing value
+# until this repo opts in explicitly (e.g. pre_pr_cmd for the pre-PR test
+# gate, automerge for GitHub-native auto-merge eligibility).
+#
+# pre_pr_cmd covers only ruff (cross-platform); the pytest suite imports
+# PyAudioWPatch (Windows-only), so it cannot run as a local pre-PR mirror --
+# the Windows CI matrix (windows-latest, py3.11+3.14) is the actual gate for
+# that part, per this repo's own "CI is the required merge gate" convention.
+pre_pr_cmd: "ruff check src tests scripts && ruff format --check src tests scripts"

@@ -6,7 +6,7 @@ import logging
 
 import numpy as np
 
-from hearsay.constants import CHANNELS, SAMPLE_RATE
+from hearsay.constants import SAMPLE_RATE
 
 log = logging.getLogger(__name__)
 

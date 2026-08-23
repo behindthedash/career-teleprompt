@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
 
-from hearsay.utils.paths import get_models_dir
+from hearsay.transcription.model_manager import load_model_with_repair
 
 log = logging.getLogger(__name__)
 
@@ -34,29 +35,29 @@ class TranscriptionEngine:
         compute_type: str = "int8",
         language: str = "en",
         vad_filter: bool = True,
+        status_callback: Callable[[str], None] | None = None,
     ) -> None:
         self.model_name = model_name
         self.device = device
         self.compute_type = compute_type
         self.language = language
         self.vad_filter = vad_filter
+        self.status_callback = status_callback
         self._model = None
 
     def load(self) -> None:
-        """Load the Whisper model into memory."""
-        from faster_whisper import WhisperModel
-
+        """Load the Whisper model into memory, repairing a broken cache once."""
         log.info(
             "Loading model '%s' (device=%s, compute=%s)",
             self.model_name,
             self.device,
             self.compute_type,
         )
-        self._model = WhisperModel(
+        self._model = load_model_with_repair(
             self.model_name,
             device=self.device,
             compute_type=self.compute_type,
-            download_root=str(get_models_dir()),
+            status_callback=self.status_callback,
         )
         log.info("Model loaded successfully")
 
@@ -88,11 +89,13 @@ class TranscriptionEngine:
         segments = []
         texts = []
         for seg in segments_iter:
-            segments.append({
-                "start": seg.start,
-                "end": seg.end,
-                "text": seg.text.strip(),
-            })
+            segments.append(
+                {
+                    "start": seg.start,
+                    "end": seg.end,
+                    "text": seg.text.strip(),
+                }
+            )
             texts.append(seg.text.strip())
 
         full_text = " ".join(texts)

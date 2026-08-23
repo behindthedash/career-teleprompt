@@ -85,7 +85,7 @@ class _SourceBuffer:
             self._frames.clear()
             data = np.concatenate([self._tail, new]) if len(self._tail) else new
             if self._overlap > 0:
-                self._tail = data[-self._overlap:].copy()
+                self._tail = data[-self._overlap :].copy()
             return data
 
 
@@ -226,11 +226,14 @@ class AudioRecorder(StoppableThread):
         buf = _SourceBuffer(AUDIO_SOURCE_MIC)
 
         def make_callback(rate: int) -> Callable:
-            def callback(indata: np.ndarray, frames: int, time_info: object, status: object) -> None:
+            def callback(
+                indata: np.ndarray, frames: int, time_info: object, status: object
+            ) -> None:
                 try:
                     buf.append(resample(indata.copy(), rate, channels))
                 except Exception:
                     log.error("Error in mic callback", exc_info=True)
+
             return callback
 
         stream = self._open_started_mic_stream(sd, make_callback, channels)
@@ -271,7 +274,9 @@ class AudioRecorder(StoppableThread):
                 last_exc = exc
                 log.warning(
                     "Opening microphone stream failed (attempt %d/%d): %s",
-                    attempt, _OPEN_ATTEMPTS, exc,
+                    attempt,
+                    _OPEN_ATTEMPTS,
+                    exc,
                 )
                 if stream is not None:
                     self._close_sd_stream(stream)
@@ -334,9 +339,7 @@ class AudioRecorder(StoppableThread):
             return None, self.mic_rate
 
         index = dev.index if (dev.index is not None and dev.index >= 0) else None
-        log.info(
-            "Microphone: %s (sd index=%s, rate=%d)", dev.name, index, dev.sample_rate
-        )
+        log.info("Microphone: %s (sd index=%s, rate=%d)", dev.name, index, dev.sample_rate)
         return index, dev.sample_rate
 
     def _record_both(self) -> None:
@@ -457,7 +460,10 @@ class AudioRecorder(StoppableThread):
         mic_rate = int(mic_dev["defaultSampleRate"])
         log.info(
             "Mic device for 'Both': %s (index=%d, ch=%d, rate=%d)",
-            mic_dev["name"], mic_dev_index, mic_channels, mic_rate,
+            mic_dev["name"],
+            mic_dev_index,
+            mic_channels,
+            mic_rate,
         )
 
         def callback(in_data, frame_count, time_info, status_flags):
@@ -490,13 +496,14 @@ class AudioRecorder(StoppableThread):
                 last_exc = exc
                 log.warning(
                     "Opening %s failed (attempt %d/%d): %s",
-                    what, attempt, _OPEN_ATTEMPTS, exc,
+                    what,
+                    attempt,
+                    _OPEN_ATTEMPTS,
+                    exc,
                 )
                 if attempt < _OPEN_ATTEMPTS and self.wait(timeout=_OPEN_RETRY_DELAY_S):
                     break  # stop requested while retrying
-        raise RuntimeError(
-            f"Could not open {what} after {_OPEN_ATTEMPTS} attempts"
-        ) from last_exc
+        raise RuntimeError(f"Could not open {what} after {_OPEN_ATTEMPTS} attempts") from last_exc
 
     @staticmethod
     def _find_pyaudio_wasapi_input(p: Any, name: str) -> int:
@@ -561,8 +568,11 @@ class AudioRecorder(StoppableThread):
             for i, stream in enumerate(streams):
                 if i not in dead_warned and not self._stream_active(stream):
                     dead_warned.add(i)
-                    log.warning("Capture stream %d (%s) is no longer active",
-                                i, buffers[i].source if i < len(buffers) else "?")
+                    log.warning(
+                        "Capture stream %d (%s) is no longer active",
+                        i,
+                        buffers[i].source if i < len(buffers) else "?",
+                    )
             if streams and len(dead_warned) == len(streams) and not self.stopped():
                 raise RuntimeError("All capture streams stopped unexpectedly")
 
@@ -573,7 +583,8 @@ class AudioRecorder(StoppableThread):
             if self.on_no_audio and not self.stopped() and silence.should_alert(now):
                 log.warning(
                     "No audio captured for %.0fs (source=%s) — alerting user",
-                    now - silence.last_audio, self.source,
+                    now - silence.last_audio,
+                    self.source,
                 )
                 try:
                     self.on_no_audio()
@@ -614,7 +625,8 @@ class AudioRecorder(StoppableThread):
         chunk = AudioChunk(index=chunk_index, window_start=window_start, parts=parts)
         log.debug(
             "Window %d queued (start=%.0fs, %s)",
-            chunk_index, window_start,
+            chunk_index,
+            window_start,
             ", ".join(f"{s}={len(a)}" for s, a in parts.items()),
         )
         while True:

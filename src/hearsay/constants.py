@@ -1,7 +1,7 @@
 """Application constants and model configuration."""
 
 APP_NAME = "Hearsay"
-APP_VERSION = "1.1.5"
+APP_VERSION = "1.1.6"
 APP_AUTHOR = "Hearsay"
 
 # Audio settings
@@ -50,12 +50,12 @@ SILENCE_RMS_FLOOR = 1e-4
 # recording so it recovers if the device comes back. Re-warn periodically while
 # still silent. A live microphone in a quiet room reads well above
 # SILENCE_RMS_FLOOR, so these fire on genuinely dead capture, not normal pauses.
-SILENCE_ALERT_S = 60      # seconds of no captured audio before the first alert
-SILENCE_REALERT_S = 120   # re-alert interval while capture stays silent
+SILENCE_ALERT_S = 60  # seconds of no captured audio before the first alert
+SILENCE_REALERT_S = 120  # re-alert interval while capture stays silent
 
 # Tray icon colors (RGB)
-ICON_COLOR_IDLE = (100, 100, 100)       # Gray
-ICON_COLOR_RECORDING = (220, 50, 50)    # Red
+ICON_COLOR_IDLE = (100, 100, 100)  # Gray
+ICON_COLOR_RECORDING = (220, 50, 50)  # Red
 ICON_COLOR_PROCESSING = (50, 150, 220)  # Blue
 
 # Transcript formatting

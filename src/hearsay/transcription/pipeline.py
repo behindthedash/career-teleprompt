@@ -29,8 +29,8 @@ class TranscriptionPipeline(StoppableThread):
     """
 
     _TAIL_WORD_COUNT = 15  # words kept from previous chunk for overlap matching
-    _MIN_MATCH_WORDS = 2   # minimum overlap length to avoid false positives
-    _MIN_ECHO_WORDS = 4    # minimum length before a mic segment can be dropped as echo
+    _MIN_MATCH_WORDS = 2  # minimum overlap length to avoid false positives
+    _MIN_ECHO_WORDS = 4  # minimum length before a mic segment can be dropped as echo
     _ECHO_MATCH_RATIO = 0.8  # fraction of mic words matching system text => echo
 
     def __init__(
@@ -88,15 +88,14 @@ class TranscriptionPipeline(StoppableThread):
                 prev_tail = self._prev_tails.get(source, [])
                 if prev_tail:
                     result = self._deduplicate(result, prev_tail)
-                self._prev_tails[source] = original_words[-self._TAIL_WORD_COUNT:]
+                self._prev_tails[source] = original_words[-self._TAIL_WORD_COUNT :]
                 if not result.text:
                     continue
 
                 segments = [{**seg, "source": source} for seg in result.segments]
                 if source == AUDIO_SOURCE_MIC and system_words:
                     segments = [
-                        seg for seg in segments
-                        if not self._is_echo(seg["text"], system_words)
+                        seg for seg in segments if not self._is_echo(seg["text"], system_words)
                     ]
                 if source == AUDIO_SOURCE_SYSTEM:
                     system_words = self._normalized_words(result.text)
@@ -116,14 +115,16 @@ class TranscriptionPipeline(StoppableThread):
             if not tagged_segments:
                 return
 
-            self.transcript_queue.put(TranscriptionResult(
-                text=merged_text,
-                segments=tagged_segments,
-                language=language or "en",
-                language_probability=language_probability,
-                chunk_index=chunk.index,
-                window_start=chunk.window_start,
-            ))
+            self.transcript_queue.put(
+                TranscriptionResult(
+                    text=merged_text,
+                    segments=tagged_segments,
+                    language=language or "en",
+                    language_probability=language_probability,
+                    chunk_index=chunk.index,
+                    window_start=chunk.window_start,
+                )
+            )
         except Exception:
             log.error("Transcription failed for chunk %d", chunk.index, exc_info=True)
 

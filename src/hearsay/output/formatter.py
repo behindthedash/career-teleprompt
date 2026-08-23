@@ -63,10 +63,7 @@ def _remove_duplicate_phrases(text: str) -> str:
 def _capitalize_paragraph_starts(text: str) -> str:
     """Uppercase the first letter after each paragraph break."""
     parts = text.split("\n\n")
-    return "\n\n".join(
-        p[0].upper() + p[1:] if p and p[0].islower() else p
-        for p in parts
-    )
+    return "\n\n".join(p[0].upper() + p[1:] if p and p[0].islower() else p for p in parts)
 
 
 def _collapse_whitespace(text: str) -> str:

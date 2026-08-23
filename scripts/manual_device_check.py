@@ -11,6 +11,7 @@ stop->start cycling (the historical device-busy failure), and a full
 record -> transcribe -> markdown pass with source labels. The Whisper
 model (small.en) is downloaded on first use if not already cached.
 """
+
 import queue
 import subprocess
 import sys
@@ -39,11 +40,16 @@ def check(cond, msg):
 def speak(text, rate=1):
     """Speak via SAPI through the default output device (async)."""
     return subprocess.Popen(
-        ["powershell", "-NoProfile", "-Command",
-         "Add-Type -AssemblyName System.Speech; "
-         "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-         f"$s.Rate = {rate}; $s.Speak('{text}')"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            "Add-Type -AssemblyName System.Speech; "
+            "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+            f"$s.Rate = {rate}; $s.Speak('{text}')",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
 
 
@@ -81,8 +87,11 @@ sources = {s for c in chunks for s in c.parts}
 print(f"  sources captured: {sources}", flush=True)
 check(AUDIO_SOURCE_SYSTEM in sources, "system (loopback) audio captured via callback mode")
 for c in chunks:
-    print(f"  window {c.index}: start={c.window_start:.1f}s "
-          + ", ".join(f"{s}={len(a)/16000:.1f}s" for s, a in c.parts.items()), flush=True)
+    print(
+        f"  window {c.index}: start={c.window_start:.1f}s "
+        + ", ".join(f"{s}={len(a) / 16000:.1f}s" for s, a in c.parts.items()),
+        flush=True,
+    )
 check(not fatal_calls, "no fatal errors")
 
 # ---------------------------------------------------------------
@@ -107,12 +116,13 @@ check(not fatal_calls, f"no fatal errors across rapid cycles ({len(fatal_calls)}
 print("== Test 3: end-to-end with real Whisper (30s windows) ==", flush=True)
 rec_mod.CHUNK_DURATION_S = 30
 
-from hearsay.output.markdown_writer import MarkdownWriter
-from hearsay.transcription.engine import TranscriptionEngine
-from hearsay.transcription.pipeline import TranscriptionPipeline
+from hearsay.output.markdown_writer import MarkdownWriter  # noqa: E402
+from hearsay.transcription.engine import TranscriptionEngine  # noqa: E402
+from hearsay.transcription.pipeline import TranscriptionPipeline  # noqa: E402
 
-engine = TranscriptionEngine(model_name="small.en", device="cpu",
-                             compute_type="int8", language="en", vad_filter=True)
+engine = TranscriptionEngine(
+    model_name="small.en", device="cpu", compute_type="int8", language="en", vad_filter=True
+)
 print("  loading model...", flush=True)
 engine.load()
 
@@ -123,11 +133,15 @@ pipe.start()
 rec = AudioRecorder(audio_queue=aq, source=AUDIO_SOURCE_BOTH, on_fatal=on_fatal)
 rec.start()
 
-speak("Good morning everyone. This is the remote speaker coming through the "
-      "system audio channel. The quick brown fox jumps over the lazy dog.")
+speak(
+    "Good morning everyone. This is the remote speaker coming through the "
+    "system audio channel. The quick brown fox jumps over the lazy dog."
+)
 time.sleep(35)
-speak("And now a second remote statement arrives in the following window to "
-      "prove that transcription continues across chunk boundaries.")
+speak(
+    "And now a second remote statement arrives in the following window to "
+    "prove that transcription continues across chunk boundaries."
+)
 time.sleep(35)
 
 rec.stop()

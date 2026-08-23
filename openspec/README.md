@@ -1,31 +1,34 @@
 # OpenSpec
 
-This directory is the spec-driven development registry for the Hearsay interview-copilot fork and remains at the repository root so the OpenSpec CLI can discover it normally.
+This repository is treated as a greenfield OpenSpec baseline. Current host behavior is defined canonically under `openspec/specs/`, with implementation changes tracked under `openspec/changes/`.
 
-All OpenSpec planning artifacts live under `openspec/`:
+## Product boundary
 
-- `openspec/epics/` contains durable product/architecture epics.
-- `openspec/addenda/` contains durable roadmap/architecture amendments discovered during feature expansion.
-- `openspec/changes/<change-id>/proposal.md` captures the intent and scope for an implementation change.
-- `openspec/changes/<change-id>/design.md` captures technical design and tradeoffs when needed.
-- `openspec/changes/<change-id>/tasks.md` captures executable implementation work.
-- `openspec/changes/<change-id>/specs/<capability>/spec.md` contains capability requirements/deltas.
-- Completed changes are archived under `openspec/changes/archive/` after implementation and validation.
-- `openspec/config.yaml` contains project context and artifact rules.
+Hearsay is a reusable Windows transcription host.
 
-There is intentionally no separate `docs/specs/` registry. Epics, addenda, configuration, and change artifacts are kept together under the root OpenSpec project directory.
+**Hearsay owns:**
+- system/microphone audio capture;
+- local faster-whisper transcription;
+- finalized source-tagged transcript events;
+- subscriber registration and failure isolation;
+- live-only/no-save sessions;
+- low-latency transcription profiles;
+- generic local transcription performance diagnostics;
+- a side-effect-free supported Python host import surface.
 
-## Active roadmap
+**Hearsay does not own:**
+- interviewer intent detection;
+- RAG, embeddings, knowledge stores, PostgreSQL/pgvector;
+- interview cue generation or overlays;
+- speech-following teleprompter behavior;
+- any downstream consumer dependency set.
 
-1. [`001-live-interview-copilot.md`](epics/001-live-interview-copilot.md) — MVP: live remote speech → local transcription → retrieval → concise interview cues.
-2. [`002-speech-following-teleprompter.md`](epics/002-speech-following-teleprompter.md) — Optional speech-aware teleprompter driven by the local speaker's microphone transcript.
-3. [`003-extension-boundary-upstream-readiness.md`](epics/003-extension-boundary-upstream-readiness.md) — Refactor generic extension seams so useful pieces can be proposed upstream without coupling Hearsay to the interview-specific product.
+The first downstream consumer is `behindthedash/hearsay-interview-copilot`, but the host contract must remain useful without that application.
 
-## Working principles
+## Roadmap
 
-- Preserve Hearsay's local-first audio/transcription behavior.
-- Never require persistent recording of interview audio for the copilot workflow.
-- Treat retrieved project/resume material as user-owned local knowledge.
-- Prefer retrieval and compact cues over generating long scripted answers.
-- Keep upstream-generic changes separable from interview-specific functionality.
-- Implement each OpenSpec change as the smallest independently testable slice that advances an epic acceptance journey.
+1. [`001-extension-host-foundation.md`](epics/001-extension-host-foundation.md)
+2. [`002-upstream-readiness.md`](epics/002-upstream-readiness.md)
+3. [`003-live-performance-diagnostics.md`](epics/003-live-performance-diagnostics.md)
+
+Future implementation changes should introduce `openspec/changes/<change-name>/` when modifying this canonical baseline.

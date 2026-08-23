@@ -50,7 +50,7 @@ After setup, Hearsay lives in your system tray. Right-click the icon to start re
 
 ### Installed version
 
-Download the latest installer from the [Releases](https://github.com/parkscloud/Hearsay/releases) page and run `HearsaySetup.exe`. The app appears in your Start Menu and Add/Remove Programs.
+Download the latest installer from the [Releases](https://github.com/parkscloud/Hearsay/releases/latest) page and run `HearsaySetup.exe`. The app appears in your Start Menu and Add/Remove Programs.
 
 ### Silent install (RMM / SCCM / Intune)
 
@@ -102,6 +102,9 @@ src/hearsay/
 │   ├── devices.py           # Enumerate loopback + mic devices
 │   ├── recorder.py          # AudioRecorder thread
 │   └── resampler.py         # Resample to 16kHz mono float32
+├── events/
+│   ├── models.py            # Immutable finalized transcript events
+│   └── dispatcher.py        # Session identity + ordered event creation
 ├── transcription/
 │   ├── gpu_detect.py        # Detect CUDA, recommend model
 │   ├── model_manager.py     # Download and cache Whisper models
@@ -124,6 +127,18 @@ src/hearsay/
     ├── logging_setup.py     # File + console logging
     └── threading_utils.py   # StoppableThread, safe_after
 ```
+
+## Development quality checks
+
+Install development tooling with `pip install -r requirements-dev.txt`, then run:
+
+```bash
+ruff check src tests scripts
+ruff format --check src tests scripts
+pytest -q
+```
+
+Pull requests to `dev` run these checks on Windows against both Python 3.11 and Python 3.14.
 
 ## Building
 
