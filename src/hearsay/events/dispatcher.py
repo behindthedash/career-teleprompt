@@ -9,7 +9,6 @@ from hearsay.constants import AUDIO_SOURCE_MIC, AUDIO_SOURCE_SYSTEM
 from hearsay.events.models import TranscriptEvent, TranscriptSource
 from hearsay.transcription.engine import TranscriptionResult
 
-
 _SOURCE_MAP = {
     AUDIO_SOURCE_SYSTEM: TranscriptSource.REMOTE,
     AUDIO_SOURCE_MIC: TranscriptSource.LOCAL,
