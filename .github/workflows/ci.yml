@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   quality:
-    name: quality (py${{ matrix.python-version }})
+    name: Lint, Test & Build
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -42,7 +42,7 @@ jobs:
       - name: Ruff format check
         run: ruff format --check src tests scripts
 
-      - name: Pytest
+      - name: pytest
         run: pytest -q
 
   package-smoke:
