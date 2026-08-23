@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type { AIResponse, IntelligenceMode, StreamSource } from "../lib/types";
 import { stripThinkTags } from "../lib/utils";
+import { teleprompterDocumentFromAIResponse } from "../teleprompter/handoff";
+import { useTeleprompterStore } from "./teleprompterStore";
 
 interface StreamState {
   // Current stream
@@ -91,6 +93,20 @@ export const useStreamStore = create<StreamState>((set, get) => ({
       latencyMs,
       responseHistory: [response, ...s.responseHistory].slice(0, 5),
     }));
+
+    // A new interview answer must never displace an answer the user is already reading.
+    // While a teleprompter document is active, stage completed WhatToSay guidance as pending;
+    // explicit Prompt actions remain immediate user-authorized activation paths.
+    if (response.mode === "WhatToSay" && content.trim()) {
+      const teleprompter = useTeleprompterStore.getState();
+      if (teleprompter.document && !teleprompter.isEditing) {
+        try {
+          teleprompter.stagePendingDocument(teleprompterDocumentFromAIResponse(response));
+        } catch (error) {
+          console.warn("Failed to stage generated teleprompter answer", error);
+        }
+      }
+    }
   },
 
   setError: (error) => set({ error, isStreaming: false }),

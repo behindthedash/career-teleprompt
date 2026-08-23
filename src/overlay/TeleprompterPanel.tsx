@@ -7,6 +7,8 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Sparkles,
+  X,
 } from "lucide-react";
 import { useTeleprompterFollower } from "../hooks/useTeleprompterFollower";
 import { useTeleprompterStore } from "../stores/teleprompterStore";
@@ -21,6 +23,7 @@ export function TeleprompterPanel() {
   useTeleprompterFollower();
 
   const document = useTeleprompterStore((state) => state.document);
+  const pendingDocument = useTeleprompterStore((state) => state.pendingDocument);
   const draftText = useTeleprompterStore((state) => state.draftText);
   const activeSectionIndex = useTeleprompterStore((state) => state.activeSectionIndex);
   const cursorTokenIndex = useTeleprompterStore((state) => state.cursorTokenIndex);
@@ -43,6 +46,8 @@ export function TeleprompterPanel() {
   const setLineHeight = useTeleprompterStore((state) => state.setLineHeight);
   const setFollowingEnabled = useTeleprompterStore((state) => state.setFollowingEnabled);
   const setActiveSection = useTeleprompterStore((state) => state.setActiveSection);
+  const activatePendingDocument = useTeleprompterStore((state) => state.activatePendingDocument);
+  const dismissPendingDocument = useTeleprompterStore((state) => state.dismissPendingDocument);
 
   const [format, setFormat] = useState<TeleprompterFormat>("text");
   const [error, setError] = useState<string | null>(null);
@@ -233,6 +238,34 @@ export function TeleprompterPanel() {
           </ReaderButton>
         </div>
       </div>
+
+      {pendingDocument && (
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-primary/15 bg-primary/5 px-3 py-1.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary/70" aria-hidden="true" />
+            <span className="truncate text-[10px] font-medium text-primary/80">
+              New interview answer ready — your current reading position is unchanged.
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              onClick={activatePendingDocument}
+              className="rounded-md bg-primary/15 px-2.5 py-1 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/25"
+              title="Replace the current script with the new answer and start from its beginning"
+            >
+              Use new answer
+            </button>
+            <button
+              onClick={dismissPendingDocument}
+              className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:bg-accent/50 hover:text-foreground"
+              title="Dismiss new answer"
+              aria-label="Dismiss new answer"
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="relative min-h-0 flex-1 overflow-hidden">
         <div className="pointer-events-none absolute left-0 right-0 top-[42%] z-10 flex items-center gap-2 px-3" aria-hidden="true">
