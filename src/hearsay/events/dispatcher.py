@@ -1,4 +1,4 @@
-"""Session-scoped creation of finalized transcript events."""
+"""Session-scoped creation and delivery of finalized transcript events."""
 
 from __future__ import annotations
 
@@ -7,6 +7,10 @@ import uuid
 
 from hearsay.constants import AUDIO_SOURCE_MIC, AUDIO_SOURCE_SYSTEM
 from hearsay.events.models import TranscriptEvent, TranscriptSource
+from hearsay.events.subscriptions import (
+    TranscriptSubscriptionManager,
+    get_default_subscription_manager,
+)
 from hearsay.transcription.engine import TranscriptionResult
 
 _SOURCE_MAP = {
@@ -16,16 +20,15 @@ _SOURCE_MAP = {
 
 
 class TranscriptEventDispatcher:
-    """Create ordered immutable events without retaining transcript content.
+    """Create ordered immutable events and publish them to isolated subscribers."""
 
-    Subscriber delivery is intentionally added by a later OpenSpec change. This
-    slice owns finalized event creation, session identity, ordering, and stale
-    session rejection only.
-    """
-
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        subscription_manager: TranscriptSubscriptionManager | None = None,
+    ) -> None:
         self._lock = threading.Lock()
         self._next_sequence_by_session: dict[str, int] = {}
+        self._subscriptions = subscription_manager or get_default_subscription_manager()
 
     def start_session(self) -> str:
         """Allocate a unique session identity with sequence numbering at zero."""
@@ -46,7 +49,7 @@ class TranscriptEventDispatcher:
         session_id: str,
         result: TranscriptionResult,
     ) -> tuple[TranscriptEvent, ...]:
-        """Create one event for every finalized, source-labeled segment.
+        """Create and non-blockingly deliver finalized source-labeled events.
 
         Returns an empty tuple for a session that has already ended. This makes
         delayed prior-session results harmless while allowing teardown to drain
@@ -78,4 +81,8 @@ class TranscriptEventDispatcher:
                 sequence += 1
 
             self._next_sequence_by_session[session_id] = sequence
-            return tuple(events)
+
+        finalized_events = tuple(events)
+        for event in finalized_events:
+            self._subscriptions.publish(event)
+        return finalized_events
