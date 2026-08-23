@@ -5,11 +5,17 @@ import {
   type TeleprompterFormat,
 } from "../teleprompter/content";
 import type { AlignmentResult, FollowerStatus } from "../teleprompter/follower";
+import {
+  activatePendingDocument as activatePendingLifecycle,
+  dismissPendingDocument as dismissPendingLifecycle,
+  stagePendingGeneratedDocument,
+} from "../teleprompter/lifecycle";
 
 type TeleprompterFollowerStatus = "idle" | FollowerStatus;
 
 interface TeleprompterState {
   document: TeleprompterDocument | null;
+  pendingDocument: TeleprompterDocument | null;
   draftText: string;
   activeSectionIndex: number;
   fontSize: number;
@@ -39,6 +45,10 @@ interface TeleprompterState {
   applyFollowerAlignment: (result: AlignmentResult) => void;
   seekToken: (position: number) => void;
   resetFollower: () => void;
+
+  stagePendingDocument: (document: TeleprompterDocument) => void;
+  activatePendingDocument: () => void;
+  dismissPendingDocument: () => void;
 }
 
 const MIN_FONT_SIZE = 20;
@@ -54,6 +64,7 @@ const followerReset = {
 
 export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
   document: null,
+  pendingDocument: null,
   draftText: "",
   activeSectionIndex: 0,
   fontSize: 32,
@@ -69,6 +80,7 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
     const document = loadPreparedDocument(text, sourceUri, format);
     set({
       document,
+      pendingDocument: null,
       draftText: document.sections.map((section) => section.displayText).join("\n\n"),
       activeSectionIndex: 0,
       isEditing: false,
@@ -80,6 +92,7 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
   setDocument: (document) =>
     set({
       document,
+      pendingDocument: null,
       draftText: document.sections.map((section) => section.displayText).join("\n\n"),
       activeSectionIndex: 0,
       isEditing: false,
@@ -90,6 +103,7 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
   clearDocument: () =>
     set({
       document: null,
+      pendingDocument: null,
       draftText: "",
       activeSectionIndex: 0,
       isEditing: true,
@@ -172,6 +186,48 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
   },
 
   resetFollower: () => set({ ...followerReset }),
+
+  stagePendingDocument: (candidate) => {
+    const state = get();
+    if (state.isEditing) return;
+    const lifecycle = stagePendingGeneratedDocument(
+      { active: state.document, pending: state.pendingDocument },
+      candidate,
+    );
+    if (lifecycle.pending !== state.pendingDocument) {
+      set({ pendingDocument: lifecycle.pending });
+    }
+  },
+
+  activatePendingDocument: () => {
+    const state = get();
+    const lifecycle = activatePendingLifecycle({
+      active: state.document,
+      pending: state.pendingDocument,
+    });
+    if (!lifecycle.active || lifecycle.active === state.document) return;
+
+    set({
+      document: lifecycle.active,
+      pendingDocument: null,
+      draftText: lifecycle.active.sections.map((section) => section.displayText).join("\n\n"),
+      activeSectionIndex: 0,
+      isEditing: false,
+      followingEnabled: true,
+      ...followerReset,
+    });
+  },
+
+  dismissPendingDocument: () => {
+    const state = get();
+    const lifecycle = dismissPendingLifecycle({
+      active: state.document,
+      pending: state.pendingDocument,
+    });
+    if (lifecycle.pending !== state.pendingDocument) {
+      set({ pendingDocument: lifecycle.pending });
+    }
+  },
 }));
 
 function documentTokenCount(document: TeleprompterDocument): number {
