@@ -13,6 +13,7 @@ import customtkinter as ctk
 from hearsay.audio.recorder import AudioRecorder
 from hearsay.config import ConfigManager
 from hearsay.constants import APP_NAME, LIVE_VIEW_POLL_MS, SOURCE_LABELS
+from hearsay.events.dispatcher import TranscriptEventDispatcher
 from hearsay.output.formatter import format_timestamp
 from hearsay.output.markdown_writer import MarkdownWriter
 from hearsay.transcription.engine import TranscriptionEngine
@@ -46,10 +47,12 @@ class HearsayApp:
         self._pipeline: TranscriptionPipeline | None = None
         self._writer: MarkdownWriter | None = None
         self._tray: SystemTrayIcon | None = None
+        self._event_dispatcher = TranscriptEventDispatcher()
 
         # State
         self._recording = False
         self._recording_start_time: float | None = None
+        self._event_session_id: str | None = None
         self._teardown_thread: threading.Thread | None = None
         # Incremented on every start/stop so a slow model load can detect
         # that its session was cancelled before it starts the recorder.
@@ -112,6 +115,8 @@ class HearsayApp:
         log.info("Starting recording (source=%s)", source)
         self._recording = True
         self._recording_start_time = time.time()
+        self._event_session_id = self._event_dispatcher.start_session()
+        event_session_id = self._event_session_id
         self._session_gen += 1
         session_gen = self._session_gen
 
@@ -149,6 +154,9 @@ class HearsayApp:
             # model was loading — don't start components for a dead session.
             if not self._recording or self._session_gen != session_gen:
                 log.info("Session cancelled during model load; not starting recorder")
+                self._event_dispatcher.end_session(event_session_id)
+                if self._event_session_id == event_session_id:
+                    self._event_session_id = None
                 engine.unload()
                 return
 
@@ -278,16 +286,26 @@ class HearsayApp:
         writer = self._writer
         start_time = self._recording_start_time
         transcript_queue = self._transcript_queue
+        event_session_id = self._event_session_id
 
         self._recorder = None
         self._pipeline = None
         self._engine = None
         self._writer = None
         self._recording_start_time = None
+        self._event_session_id = None
 
         self._teardown_thread = threading.Thread(
             target=self._teardown_recording,
-            args=(recorder, pipeline, engine, writer, start_time, transcript_queue),
+            args=(
+                recorder,
+                pipeline,
+                engine,
+                writer,
+                start_time,
+                transcript_queue,
+                event_session_id,
+            ),
             daemon=True,
             name="RecordingTeardown",
         )
@@ -301,6 +319,7 @@ class HearsayApp:
         writer: MarkdownWriter | None,
         start_time: float | None,
         transcript_queue: queue.Queue | None = None,
+        event_session_id: str | None = None,
     ) -> None:
         """Blocking recording teardown — runs on a background thread."""
         # 1. Stop recorder first so it flushes remaining audio to the queue.
@@ -337,12 +356,15 @@ class HearsayApp:
         if engine:
             engine.unload()
 
-        # Drain any remaining transcript results that arrived after polling stopped
-        if writer and transcript_queue is not None:
+        # Drain any remaining transcript results that arrived after polling stopped.
+        if transcript_queue is not None:
             try:
                 while True:
                     result = transcript_queue.get_nowait()
-                    writer.append(result)
+                    if event_session_id is not None:
+                        self._event_dispatcher.publish_result(event_session_id, result)
+                    if writer:
+                        writer.append(result)
                     if self._live_view:
                         for seg in result.segments:
                             line = self._format_live_line(result, seg)
@@ -355,6 +377,8 @@ class HearsayApp:
                             )
             except queue.Empty:
                 pass
+
+        self._event_dispatcher.end_session(event_session_id)
 
         # Finalize transcript
         duration = None
@@ -412,9 +436,12 @@ class HearsayApp:
         if not self._recording:
             return
 
+        event_session_id = self._event_session_id
         try:
             while True:
                 result = self._transcript_queue.get_nowait()
+                if event_session_id is not None:
+                    self._event_dispatcher.publish_result(event_session_id, result)
                 # Write to markdown
                 if self._writer:
                     self._writer.append(result)
@@ -478,12 +505,14 @@ class HearsayApp:
                 self._writer,
                 self._recording_start_time,
                 self._transcript_queue,
+                self._event_session_id,
             )
             self._recorder = None
             self._pipeline = None
             self._engine = None
             self._writer = None
             self._recording_start_time = None
+            self._event_session_id = None
         elif self._teardown_thread is not None:
             self._teardown_thread.join(timeout=30)
             self._teardown_thread = None

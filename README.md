@@ -102,6 +102,9 @@ src/hearsay/
 │   ├── devices.py           # Enumerate loopback + mic devices
 │   ├── recorder.py          # AudioRecorder thread
 │   └── resampler.py         # Resample to 16kHz mono float32
+├── events/
+│   ├── models.py            # Immutable finalized transcript events
+│   └── dispatcher.py        # Session identity + ordered event creation
 ├── transcription/
 │   ├── gpu_detect.py        # Detect CUDA, recommend model
 │   ├── model_manager.py     # Download and cache Whisper models
