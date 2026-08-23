@@ -9,6 +9,7 @@ Covers: per-source overlap dedup, fuzzy echo guard, segment merge/sort,
 source-label placement (switches, single-source, gap paragraphs),
 post-process label preservation, and empty-session output.
 """
+
 import queue
 import re
 import sys
@@ -21,9 +22,9 @@ import numpy as np
 
 from hearsay.audio.devices import AudioDevice, match_device_by_name
 from hearsay.audio.recorder import (
+    _OPEN_ATTEMPTS,
     AudioChunk,
     AudioRecorder,
-    _OPEN_ATTEMPTS,
     _SilenceMonitor,
     _SourceBuffer,
 )
@@ -101,25 +102,55 @@ check(len(cut3) == 0, "cut with no new audio returns empty (no tail re-emit)")
 
 print("== Both-mode conversation ==")
 eng = FakeEngine()
-w0_sys = eng.register(new_arr(), "Hello this is the remote speaker talking now.",
-                      [{"start": 0.5, "end": 3.0, "text": "Hello this is the remote speaker talking now."}])
-w0_mic = eng.register(new_arr(), "Hi there this is the local person.",
-                      [{"start": 3.5, "end": 6.0, "text": "Hi there this is the local person."}])
-w1_sys = eng.register(new_arr(), "talking now. And here is more remote speech.",
-                      [{"start": 0.2, "end": 1.0, "text": "talking now."},
-                       {"start": 1.2, "end": 4.0, "text": "And here is more remote speech."}])
-w1_mic = eng.register(new_arr(), "And here is more remote speech. Yes I agree completely with that.",
-                      [{"start": 1.3, "end": 4.1, "text": "And here is more remote speech."},
-                       {"start": 5.0, "end": 8.0, "text": "Yes I agree completely with that."}])
-w2_mic = eng.register(new_arr(), "Now some more local talk after a pause.",
-                      [{"start": 5.0, "end": 8.0, "text": "Now some more local talk after a pause."}])
-w3_sys = eng.register(new_arr(), "Remote is back um talking again.",
-                      [{"start": 1.0, "end": 3.0, "text": "Remote is back um talking again."}])
-w4_sys = eng.register(new_arr(), "The quick brown fox jumps over the lazy dog today.",
-                      [{"start": 0.5, "end": 4.0, "text": "The quick brown fox jumps over the lazy dog today."}])
-w4_mic = eng.register(new_arr(), "The quick brown box jumps over the lazy dog today. Should I restart it now or wait?",
-                      [{"start": 0.9, "end": 4.4, "text": "The quick brown box jumps over the lazy dog today."},
-                       {"start": 6.0, "end": 8.0, "text": "Should I restart it now or wait?"}])
+w0_sys = eng.register(
+    new_arr(),
+    "Hello this is the remote speaker talking now.",
+    [{"start": 0.5, "end": 3.0, "text": "Hello this is the remote speaker talking now."}],
+)
+w0_mic = eng.register(
+    new_arr(),
+    "Hi there this is the local person.",
+    [{"start": 3.5, "end": 6.0, "text": "Hi there this is the local person."}],
+)
+w1_sys = eng.register(
+    new_arr(),
+    "talking now. And here is more remote speech.",
+    [
+        {"start": 0.2, "end": 1.0, "text": "talking now."},
+        {"start": 1.2, "end": 4.0, "text": "And here is more remote speech."},
+    ],
+)
+w1_mic = eng.register(
+    new_arr(),
+    "And here is more remote speech. Yes I agree completely with that.",
+    [
+        {"start": 1.3, "end": 4.1, "text": "And here is more remote speech."},
+        {"start": 5.0, "end": 8.0, "text": "Yes I agree completely with that."},
+    ],
+)
+w2_mic = eng.register(
+    new_arr(),
+    "Now some more local talk after a pause.",
+    [{"start": 5.0, "end": 8.0, "text": "Now some more local talk after a pause."}],
+)
+w3_sys = eng.register(
+    new_arr(),
+    "Remote is back um talking again.",
+    [{"start": 1.0, "end": 3.0, "text": "Remote is back um talking again."}],
+)
+w4_sys = eng.register(
+    new_arr(),
+    "The quick brown fox jumps over the lazy dog today.",
+    [{"start": 0.5, "end": 4.0, "text": "The quick brown fox jumps over the lazy dog today."}],
+)
+w4_mic = eng.register(
+    new_arr(),
+    "The quick brown box jumps over the lazy dog today. Should I restart it now or wait?",
+    [
+        {"start": 0.9, "end": 4.4, "text": "The quick brown box jumps over the lazy dog today."},
+        {"start": 6.0, "end": 8.0, "text": "Should I restart it now or wait?"},
+    ],
+)
 
 windows = [
     AudioChunk(0, 0.0, {AUDIO_SOURCE_SYSTEM: w0_sys, AUDIO_SOURCE_MIC: w0_mic}),
@@ -134,18 +165,24 @@ check(len(results) == 5, f"5 results emitted ({len(results)})")
 r1 = results[1]
 sys_texts = [s["text"] for s in r1.segments if s["source"] == AUDIO_SOURCE_SYSTEM]
 mic_texts = [s["text"] for s in r1.segments if s["source"] == AUDIO_SOURCE_MIC]
-check(sys_texts == ["And here is more remote speech."],
-      f"window1 system deduped overlap ({sys_texts})")
-check(mic_texts == ["Yes I agree completely with that."],
-      f"window1 mic echo dropped, genuine reply kept ({mic_texts})")
+check(
+    sys_texts == ["And here is more remote speech."],
+    f"window1 system deduped overlap ({sys_texts})",
+)
+check(
+    mic_texts == ["Yes I agree completely with that."],
+    f"window1 mic echo dropped, genuine reply kept ({mic_texts})",
+)
 check(r1.window_start == 30.0, "window_start propagated")
 starts = [s["start"] for s in r1.segments]
 check(starts == sorted(starts), "segments time-sorted")
 
 r4 = results[4]
 mic4 = [s["text"] for s in r4.segments if s["source"] == AUDIO_SOURCE_MIC]
-check(mic4 == ["Should I restart it now or wait?"],
-      f"fuzzy echo (box/fox) dropped, dissimilar reply kept ({mic4})")
+check(
+    mic4 == ["Should I restart it now or wait?"],
+    f"fuzzy echo (box/fox) dropped, dissimilar reply kept ({mic4})",
+)
 
 print("== Writer: labels, gaps, post-process ==")
 writer = MarkdownWriter(OUT, title="Test Both")
@@ -160,25 +197,38 @@ print("--------------------")
 check(content.count("**Remote:**") == 3, f"3 Remote labels ({content.count('**Remote:**')})")
 check(content.count("**Local:**") == 3, f"3 Local labels ({content.count('**Local:**')})")
 check("**Remote:** Hello" in content, "first label at top")
-check(re.findall(r"\*\*(Remote|Local):\*\*", content) == ["Remote", "Local"] * 3,
-      "labels alternate on every source switch")
+check(
+    re.findall(r"\*\*(Remote|Local):\*\*", content) == ["Remote", "Local"] * 3,
+    "labels alternate on every source switch",
+)
 check("]:**" not in content, "no [m:ss] timestamps in labels")
-check("\n\nNow some more local talk" in content,
-      "same-source long gap gets paragraph break without new label")
+check(
+    "\n\nNow some more local talk" in content,
+    "same-source long gap gets paragraph break without new label",
+)
 check(" um " not in content, "post-process still strips fillers")
 check("Recording duration: 2m 5s" in content, "footer duration present")
 check("No speech was captured" not in content, "no empty-session note for real session")
 
 print("== Writer: single source -> one label ==")
 eng2 = FakeEngine()
-s0 = eng2.register(new_arr(), "Only remote speech here.",
-                   [{"start": 0.0, "end": 2.0, "text": "Only remote speech here."}])
-s1 = eng2.register(new_arr(), "Continuing without switching.",
-                   [{"start": 0.5, "end": 2.5, "text": "Continuing without switching."}])
-results2 = run_windows(eng2, [
-    AudioChunk(0, 0.0, {AUDIO_SOURCE_SYSTEM: s0}),
-    AudioChunk(1, 30.0, {AUDIO_SOURCE_SYSTEM: s1}),
-])
+s0 = eng2.register(
+    new_arr(),
+    "Only remote speech here.",
+    [{"start": 0.0, "end": 2.0, "text": "Only remote speech here."}],
+)
+s1 = eng2.register(
+    new_arr(),
+    "Continuing without switching.",
+    [{"start": 0.5, "end": 2.5, "text": "Continuing without switching."}],
+)
+results2 = run_windows(
+    eng2,
+    [
+        AudioChunk(0, 0.0, {AUDIO_SOURCE_SYSTEM: s0}),
+        AudioChunk(1, 30.0, {AUDIO_SOURCE_SYSTEM: s1}),
+    ],
+)
 writer2 = MarkdownWriter(OUT, title="Test Single")
 for r in results2:
     writer2.append(r)
@@ -227,7 +277,9 @@ class _FakeMicStream:
     def start(self):
         if self._fail[0] > 0:
             self._fail[0] -= 1
-            raise RuntimeError("Error starting stream: Unanticipated host error [PaErrorCode -9999]")
+            raise RuntimeError(
+                "Error starting stream: Unanticipated host error [PaErrorCode -9999]"
+            )
         self.started = True
 
     def stop(self):
@@ -257,13 +309,19 @@ class _FakeSD:
 
 def _make_recorder():
     # mic_device_index set => _resolve_mic_sounddevice returns instantly (no hardware)
-    r = AudioRecorder(audio_queue=queue.Queue(), source=AUDIO_SOURCE_MIC,
-                      mic_device_index=7, mic_rate=48000)
+    r = AudioRecorder(
+        audio_queue=queue.Queue(), source=AUDIO_SOURCE_MIC, mic_device_index=7, mic_rate=48000
+    )
     r.wait = lambda timeout=None: False  # don't actually sleep between retries
     return r
 
 
-_noop_cb = lambda rate: (lambda *a: None)
+def _noop_cb(rate):
+    def callback(*args):
+        return None
+
+    return callback
+
 
 rec = _make_recorder()
 sd2 = _FakeSD(fail_starts=2)  # first two starts fail with -9999, third succeeds
@@ -284,13 +342,19 @@ check(raised, "gives up with RuntimeError after all attempts exhausted")
 check(len(sd3.streams) == _OPEN_ATTEMPTS, f"tried exactly _OPEN_ATTEMPTS ({len(sd3.streams)})")
 
 print("== Device name matching (match_device_by_name) ==")
+
+
 def _dev(name):
     return AudioDevice(index=0, name=name, channels=1, sample_rate=48000, is_loopback=False)
+
+
 _devs = [_dev("Microphone (HD Pro Webcam C920)"), _dev("Headset (Poly)"), _dev("Stereo Mix")]
 check(match_device_by_name("", _devs) is None, "empty name -> None (fall back to default)")
 check(match_device_by_name("Nonexistent Mic", _devs) is None, "no match -> None")
 check(match_device_by_name("Headset (Poly)", _devs).name == "Headset (Poly)", "exact match")
-check(match_device_by_name("Stereo", _devs).name == "Stereo Mix", "prefix match (stored name shorter)")
+check(
+    match_device_by_name("Stereo", _devs).name == "Stereo Mix", "prefix match (stored name shorter)"
+)
 check(
     match_device_by_name("Microphone (HD Pro Webcam C920) 2- ", _devs) is not None,
     "tolerant match survives library-to-library name drift",

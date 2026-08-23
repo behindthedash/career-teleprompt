@@ -1,7 +1,5 @@
 """Entry point for Hearsay: python -m hearsay"""
 
-import sys
-
 
 def main() -> None:
     from hearsay.utils.logging_setup import setup_logging

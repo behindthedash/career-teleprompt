@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from hearsay.constants import MODEL_TABLE
 from hearsay.utils.paths import get_models_dir
