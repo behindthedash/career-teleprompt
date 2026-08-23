@@ -4,11 +4,15 @@
 # until this repo opts in explicitly (e.g. pre_pr_cmd for the pre-PR test
 # gate, automerge for GitHub-native auto-merge eligibility).
 #
-# pre_pr_cmd covers only ruff (cross-platform); the pytest suite imports
-# PyAudioWPatch (Windows-only), so it cannot run as a local pre-PR mirror --
-# the Windows CI matrix (windows-latest, py3.11+3.14) is the actual gate for
-# that part, per this repo's own "CI is the required merge gate" convention.
-pre_pr_cmd: "ruff check src tests scripts && ruff format --check src tests scripts"
+# pre_pr_cmd is a stopgap "skip" -- the prior value (ruff over src/tests/
+# scripts) pointed at the pre-NexQ-merge Python layout, which no longer
+# exists (src/ is now the Tauri/TS app, no tests/ dir at repo root; see
+# .github/workflows/ci.yml for the actual gate: tsc --noEmit, npm run
+# build, cargo check). This blocked the pre-PR preflight gate outright.
+# CI remains the real merge gate per this repo's own convention; choosing
+# a TS/Tauri-appropriate local mirror (e.g. `npx tsc --noEmit`) is a
+# follow-up decision for whoever owns this repo, not guessed here.
+pre_pr_cmd: skip
 
 # Greenfield: most permissive setting available (max_risk is capped at
 # medium in code -- high/critical are never automerge-eligible regardless
