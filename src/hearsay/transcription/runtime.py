@@ -83,7 +83,6 @@ class ProfiledAudioRecorder(AudioRecorder):
             chunk_index += 1
             window_open = elapsed
 
-        # Preserve the base recorder's final partial-window flush semantics.
         self._emit_window(buffers, chunk_index, window_open)
 
 
@@ -98,18 +97,23 @@ class ObservedTranscriptionPipeline(TranscriptionPipeline):
         *,
         profile: TranscriptionProfile = NORMAL_TRANSCRIPTION_PROFILE,
         on_metrics: Callable[[TranscriptionMetrics], None] | None = None,
+        drain_on_stop: bool = True,
+        on_error: Callable[[Exception], None] | None = None,
     ) -> None:
         super().__init__(
             audio_queue=audio_queue,
             transcript_queue=transcript_queue,
             engine=engine,
+            drain_on_stop=drain_on_stop,
+            on_error=on_error,
         )
         self.profile = profile
         self.on_metrics = on_metrics
 
-    def _process_window(self, chunk: AudioChunk) -> None:
+    def _process_window(self, chunk: AudioChunk) -> bool:
         started = time.perf_counter()
-        super()._process_window(chunk)
+        if not super()._process_window(chunk):
+            return False
         elapsed = time.perf_counter() - started
 
         audio_duration = self._new_audio_duration(chunk)
@@ -142,6 +146,7 @@ class ObservedTranscriptionPipeline(TranscriptionPipeline):
                 self.on_metrics(metrics)
             except Exception:
                 log.error("Transcription metrics callback failed", exc_info=True)
+        return True
 
     def _new_audio_duration(self, chunk: AudioChunk) -> float:
         """Estimate new audio represented by a chunk, excluding repeated overlap."""
