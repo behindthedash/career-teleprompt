@@ -119,9 +119,12 @@ def test_sync_apply_refuses_dirty_worktree(tmp_path: Path) -> None:
 
 
 def test_candidate_path_guard_allows_generic_host_files() -> None:
-    assert check_candidate.inspect_paths(
-        ["src/hearsay/events/models.py", "tests/test_transcript_events.py", "docs/api.md"]
-    ) == []
+    assert (
+        check_candidate.inspect_paths(
+            ["src/hearsay/events/models.py", "tests/test_transcript_events.py", "docs/api.md"]
+        )
+        == []
+    )
 
 
 def test_candidate_path_guard_blocks_fork_private_and_transcript_artifacts() -> None:
