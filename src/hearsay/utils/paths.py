@@ -1,4 +1,4 @@
-"""Manage %APPDATA%\\Hearsay directory structure."""
+"""Manage Hearsay application-data directory structure."""
 
 import os
 import sys
@@ -27,6 +27,14 @@ def get_appdata_dir() -> Path:
     return app_dir
 
 
+def get_local_appdata_dir() -> Path:
+    """Return local, non-roaming storage for large machine-specific assets."""
+    base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    app_dir = base / APP_NAME
+    app_dir.mkdir(parents=True, exist_ok=True)
+    return app_dir
+
+
 def get_config_path() -> Path:
     """Return path to the config JSON file."""
     return get_appdata_dir() / "config.json"
@@ -37,6 +45,13 @@ def get_models_dir() -> Path:
     models_dir = get_appdata_dir() / "models"
     models_dir.mkdir(parents=True, exist_ok=True)
     return models_dir
+
+
+def get_gpu_runtime_dir() -> Path:
+    """Return local storage for optional NVIDIA GPU runtime components."""
+    runtime_dir = get_local_appdata_dir() / "gpu-runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    return runtime_dir
 
 
 def get_log_dir() -> Path:
