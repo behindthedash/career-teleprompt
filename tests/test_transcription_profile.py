@@ -77,10 +77,9 @@ def test_profiled_recorder_flushes_final_partial_window(monkeypatch) -> None:
     monkeypatch.setattr(
         recorder,
         "_emit_window",
-        lambda buffers, chunk_index, window_start: emitted.append(
-            (chunk_index, window_start)
-        )
-        or True,
+        lambda buffers, chunk_index, window_start: (
+            emitted.append((chunk_index, window_start)) or True
+        ),
     )
 
     def fake_wait(timeout):
