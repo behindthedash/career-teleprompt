@@ -1,8 +1,6 @@
 import { create } from "zustand";
 import type { AIResponse, IntelligenceMode, StreamSource } from "../lib/types";
 import { stripThinkTags } from "../lib/utils";
-import { teleprompterDocumentFromAIResponse } from "../teleprompter/handoff";
-import { useTeleprompterStore } from "./teleprompterStore";
 
 interface StreamState {
   // Current stream
@@ -93,18 +91,6 @@ export const useStreamStore = create<StreamState>((set, get) => ({
       latencyMs,
       responseHistory: [response, ...s.responseHistory].slice(0, 5),
     }));
-
-    // Interview "What to Say" answers are immediately available to the speech-following
-    // teleprompter. The document stays explicitly generated/ephemeral and retains provenance.
-    if (response.mode === "WhatToSay" && content.trim()) {
-      try {
-        useTeleprompterStore
-          .getState()
-          .setDocument(teleprompterDocumentFromAIResponse(response));
-      } catch (error) {
-        console.warn("Failed to prepare What to Say response for teleprompter", error);
-      }
-    }
   },
 
   setError: (error) => set({ error, isStreaming: false }),
