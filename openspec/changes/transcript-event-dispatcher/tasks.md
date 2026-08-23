@@ -1,5 +1,5 @@
 ## 1. Event model
-- [x] 1.1 Add immutable `TranscriptEvent` and source/session typing.
+- [x] 1.1 Add immutable `TranscriptEvent` and source / session typing.
 - [x] 1.2 Add per-session monotonic sequence behavior.
 
 ## 2. Publication
