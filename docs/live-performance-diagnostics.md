@@ -24,6 +24,32 @@ The supported diagnostic configurations are:
 
 The GPU test is disabled when supported CUDA inference is not detected. When GPU VRAM is known and below the approximately 6 GB required by `turbo`, Hearsay explains why that test is unavailable rather than presenting a broken button. A CUDA/model-load failure is also reported as a failed test and never as a completed benchmark.
 
+## Optional NVIDIA GPU support
+
+Seeing an NVIDIA GPU is not sufficient to run faster-whisper on CUDA. Current CTranslate2/faster-whisper builds also need compatible CUDA 12 cuBLAS and cuDNN 9 runtime libraries.
+
+Hearsay keeps these large proprietary NVIDIA components out of the normal installer. When a compatible NVIDIA GPU is detected, **Performance Test** offers **Install GPU Support**. The normal-user flow:
+
+1. explains that the optional download is approximately 1.3 GB and needs about 4 GB of temporary free disk space;
+2. downloads pinned NVIDIA Windows runtime wheels directly from PyPI over HTTPS;
+3. accepts only `files.pythonhosted.org` wheel downloads whose PyPI metadata matches Hearsay's pinned SHA-256 digests;
+4. extracts only the NVIDIA runtime DLLs and included license files into `%LOCALAPPDATA%\Hearsay\gpu-runtime`;
+5. activates that directory only for Hearsay and Hearsay child processes rather than editing the machine-wide `PATH`;
+6. reruns the isolated real-CUDA preflight before live capture starts.
+
+The first-run setup wizard uses the same installer when it recommends GPU transcription. If optional GPU support cannot be prepared, first-run setup falls back to the supported CPU configuration instead of saving a broken CUDA configuration. GPU support can then be retried later through **Settings → Performance Test...**.
+
+The currently pinned runtime packages are:
+
+| NVIDIA package | Version |
+| --- | --- |
+| `nvidia-cublas-cu12` | `12.9.2.10` |
+| `nvidia-cudnn-cu12` | `9.24.0.43` |
+
+These packages remain subject to NVIDIA's software license. Hearsay does not silently download them; installation begins only after the user chooses the GPU-support action (or proceeds through first-run setup after being told that the optional GPU runtime will be prepared).
+
+A compatible system-wide CUDA/cuDNN installation can still satisfy preflight without the Hearsay-managed runtime.
+
 ## Sample progress
 
 A completed test requires at least **3 minutes of effective captured audio**. Wall-clock time and silence do not satisfy the sample target by themselves.
@@ -94,4 +120,4 @@ Reports do not contain transcript text, captured audio, or transcript artifact p
 
 ## Final hardware validation
 
-The remaining release-validation step is to run representative several-minute CPU and NVIDIA GPU tests through the packaged Windows application and record the content-free summaries. Those real-device runs are the evidence required to close low-latency profiling task 4.3; CI cannot substitute for representative local audio and NVIDIA hardware.
+The CPU half of the representative hardware matrix has been recorded as Marginal. The NVIDIA GPU half remains open until the packaged application completes at least three minutes of effective audio after a successful CUDA preflight. A missing-runtime/preflight failure is useful product evidence but does not count as the required GPU performance sample.
