@@ -1,187 +1,169 @@
-# Hearsay
+<p align="center">
+  <img src="src-tauri/icons/nexq-clean.png" alt="NexQ" width="120">
+</p>
+<p align="center">
+  <strong>AI Meeting Assistant & Real-Time Interview Copilot</strong>
+</p>
 
-[![Release](https://img.shields.io/github/v/release/parkscloud/Hearsay?label=release&color=1a73e8)](https://github.com/parkscloud/Hearsay/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/parkscloud/Hearsay/total?color=1a73e8)](https://github.com/parkscloud/Hearsay/releases)
-[![License: MIT](https://img.shields.io/github/license/parkscloud/Hearsay?color=green)](LICENSE)
-[![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)](https://github.com/parkscloud/Hearsay/releases/latest)
+<p align="center">
 
-**Windows desktop app that records system audio and/or microphone input and transcribes it in real-time using OpenAI's open-source Whisper model running locally.**
+[![Release](https://img.shields.io/github/v/release/VahidAlizadeh/NexQ?style=flat-square&color=blue)](https://github.com/VahidAlizadeh/NexQ/releases/latest)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Build](https://img.shields.io/github/actions/workflow/status/VahidAlizadeh/NexQ/release.yml?style=flat-square&label=build)](https://github.com/VahidAlizadeh/NexQ/actions/workflows/release.yml)
+[![Downloads](https://img.shields.io/github/downloads/VahidAlizadeh/NexQ/total?style=flat-square&color=orange)](https://github.com/VahidAlizadeh/NexQ/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?style=flat-square&logo=windows)](https://github.com/VahidAlizadeh/NexQ/releases/latest)
+[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?style=flat-square&logo=tauri&logoColor=white)](https://v2.tauri.app/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=white)](https://react.dev/)
+[![Rust](https://img.shields.io/badge/Rust-stable-DEA584?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 
-No API calls, no cloud services -- everything runs on your machine.
+</p>
 
----
+<p align="center">
+  <img src="website/public/screenshots/live-meeting-demo.gif" alt="NexQ in action — live meeting with transcript, translation, and AI assist" width="700">
+</p>
+<p align="center"><em>NexQ overlay during a live interview — real-time transcription and AI suggestions</em></p>
+
+### Why NexQ?
+
+🔒 **100% Local** — your audio and data never leave your machine
+
+🆓 **Free & Open Source** — no subscriptions, no limits, ever
+
+⚡ **10 STT + 8 LLM providers** — from local Whisper & Ollama to cloud Deepgram & OpenAI
 
 ## Features
 
-- **System audio capture** -- record what your speakers play (YouTube, Teams, podcasts, etc.) via WASAPI loopback
-- **Microphone capture** -- record from your mic, or capture both sources together
-- **Speaker-source labels** -- transcripts mark every switch between **Remote** (system audio) and **Local** (microphone) speech with a bold label, so conversations read like a dialogue
-- **Real-time transcription** -- text appears in a live view window as you record
-- **Local AI** -- uses [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (CTranslate2), no internet required after model download
-- **GPU + CPU** -- auto-detects NVIDIA GPU; works on CPU with INT8 quantization
-- **Markdown output** -- date-stamped `.md` transcripts saved to your chosen directory
-- **System tray app** -- runs quietly in the tray, right-click to start/stop recording
-- **First-run wizard** -- detects hardware, downloads the right model, configures everything
-- **Windows installer** -- appears in Add/Remove Programs, Start Menu shortcut, clean uninstall
+- **Dual-party transcription** — captures mic ("You") and system audio ("Them") simultaneously
+- **Real-time AI copilot** — get streaming answers, follow-up suggestions, and meeting recaps from 8 LLM providers
+- **Local RAG pipeline** — index your own documents (PDF, DOCX, TXT, MD) for context-aware AI responses
+- **Gemini Context Cache** — upload documents to Gemini once, skip local embedding entirely for ~3-5s faster queries
+- **10 STT providers** — Web Speech API, Deepgram, Groq, Whisper, ONNX Runtime, and more
+- **Always-on-top overlay** — compact, transparent floating window visible only to you
+- **Bookmarks & action items** — pin key moments and auto-extract tasks
+- **Speaker labeling** — identify and name each speaker in the transcript
+- **Multi-language translation** — real-time translation via 5 providers (100+ languages)
+- **Audio recording & playback** — record meetings as WAV, replay with synced transcript
+- **Meeting scenarios** — pre-configured templates for interviews, lectures, and team meetings
 
 ## Quick Start
 
-### From source
+1. **Download** the [latest release](https://github.com/VahidAlizadeh/NexQ/releases/latest)
+2. **Configure** your STT and LLM providers (or use free local models)
+3. **Start** any meeting — NexQ captures system audio automatically
 
-```bash
-# Clone the repo
-git clone https://github.com/parkscloud/Hearsay.git
-cd Hearsay
+[Getting Started Guide](docs/user-guide/getting-started.md) | [All User Guides](docs/user-guide/)
 
-# Install dependencies
-pip install -r requirements.txt
+## Gemini Context Cache
 
-# Run
-python -m hearsay
-```
+For users running NexQ on a laptop without a dedicated GPU, local embedding can add 2–5 seconds of latency per AI query. The **Gemini Context Cache** feature eliminates this entirely.
 
-On first launch, the setup wizard walks you through:
-1. Hardware detection (GPU vs CPU)
-2. Audio source selection
-3. Output directory
-4. Model download
+Instead of embedding documents locally via Ollama on every query, NexQ uploads your context documents to Gemini's servers once per meeting session. Gemini pre-processes and stores the KV state. Every subsequent query skips local embedding completely — only the live transcript and your question are sent fresh.
 
-After setup, Hearsay lives in your system tray. Right-click the icon to start recording.
+**Setup:**
+1. Load your context documents (PDF, DOCX, TXT) in the Context panel
+2. Go to **Settings → Context Strategy**
+3. Select **Gemini Context Cache**
+4. Choose your model and TTL, then click **Create Cache from Context Docs**
 
-### Installed version
+**Requirements:** Google Gemini API key, documents loaded in context.
 
-Download the latest installer from the [Releases](https://github.com/parkscloud/Hearsay/releases/latest) page and run `HearsaySetup.exe`. The app appears in your Start Menu and Add/Remove Programs.
+**Speed comparison (CPU-only laptop):**
 
-### Silent install (RMM / SCCM / Intune)
+| Mode | Per-query overhead | Notes |
+|------|-------------------|-------|
+| Local RAG (`all-minilm`) | ~1–2s | Fastest local option |
+| Local RAG (`nomic-embed-text`) | ~3–5s | Default model |
+| **Gemini Context Cache** | **~0s** | No local embedding at all |
 
-```
-HearsaySetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-```
+Cache expires after your chosen TTL (30 min – 24 hours). Delete it early from the same settings panel.
 
-Installs to `C:\Program Files\Hearsay` for all users. Hearsay starts automatically at login. To skip auto-start:
+## Why NexQ vs. Others?
 
-```
-HearsaySetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS=""
-```
+| | NexQ | Otter.ai | Granola | Krisp |
+|---|:---:|:---:|:---:|:---:|
+| **Price** | **Free** | $8+/mo | $18/mo | $16/mo |
+| **100% Local** | Yes | No | Partial | Partial |
+| **Open Source** | Yes | No | No | No |
+| **No Bot Joins** | Yes | No | Yes | Yes |
+| **STT Providers** | **10** | 1 | 1 | 1 |
+| **LLM Providers** | **8** | 1 | 1 | 1 |
+| **Local LLM** | Yes | No | No | No |
+| **RAG / Doc Context** | Yes | No | No | No |
 
-Uninstall silently:
+## Screenshots
 
-```
-"C:\Program Files\Hearsay\unins000.exe" /VERYSILENT
-```
-
-## Usage
-
-1. **Right-click** the tray icon
-2. Choose **Start Recording** > **System Audio**, **Microphone**, or **Both**
-3. Audio is transcribed in real-time -- open **Live Transcript** to watch
-4. **Stop Recording** when done -- a timestamped `.md` file is saved to your output directory
-
-In **Both** mode each source is transcribed separately and labeled (**Remote** for system audio, **Local** for your mic). Headphones give the cleanest separation; on speakers, Hearsay automatically filters the microphone's echo of remote speech.
-
-## Hardware Requirements
-
-| Setup | Recommended Model | Speed |
-|-------|-------------------|-------|
-| NVIDIA GPU (6+ GB VRAM) | `turbo` (float16) | ~8x real-time |
-| NVIDIA GPU (4 GB VRAM) | `small.en` (float16) | ~4x real-time |
-| CPU only | `small.en` (int8) | ~1x real-time |
-
-A 1-hour recording transcribes in ~7 min on GPU or ~60 min on CPU.
-
-## Project Structure
-
-```
-src/hearsay/
-├── __init__.py              # Version string
-├── __main__.py              # Entry point
-├── app.py                   # Application orchestrator
-├── config.py                # AppConfig + ConfigManager (JSON in %APPDATA%)
-├── constants.py             # App name, model table, defaults
-├── audio/
-│   ├── devices.py           # Enumerate loopback + mic devices
-│   ├── recorder.py          # AudioRecorder thread
-│   └── resampler.py         # Resample to 16kHz mono float32
-├── events/
-│   ├── models.py            # Immutable finalized transcript events
-│   └── dispatcher.py        # Session identity + ordered event creation
-├── transcription/
-│   ├── gpu_detect.py        # Detect CUDA, recommend model
-│   ├── model_manager.py     # Download and cache Whisper models
-│   ├── engine.py            # TranscriptionEngine (faster-whisper)
-│   └── pipeline.py          # TranscriptionPipeline thread
-├── output/
-│   ├── formatter.py         # Timestamp formatting
-│   └── markdown_writer.py   # Write .md transcripts
-├── ui/
-│   ├── tray.py              # System tray icon (pystray)
-│   ├── wizard.py            # First-run setup wizard
-│   ├── live_view.py         # Live transcript window
-│   ├── about_window.py      # About dialog
-│   ├── settings_window.py   # Settings editor
-│   ├── window_icon.py       # Title-bar icon helper (Hearsay logo)
-│   ├── icons.py             # Programmatic icon generation
-│   └── theme.py             # customtkinter theme
-└── utils/
-    ├── paths.py             # %APPDATA%\Hearsay directories
-    ├── logging_setup.py     # File + console logging
-    └── threading_utils.py   # StoppableThread, safe_after
-```
-
-## Development quality checks
-
-Install development tooling with `pip install -r requirements-dev.txt`, then run:
-
-```bash
-ruff check src tests scripts
-ruff format --check src tests scripts
-pytest -q
-```
-
-Pull requests to `dev` run these checks on Windows against both Python 3.11 and Python 3.14.
-
-## Building
-
-### Prerequisites
-
-1. **Python 3.11+ (64-bit)** -- the installer packages x64-only builds
-2. **Project dependencies:** `pip install -r requirements.txt`
-3. **PyInstaller:** `pip install pyinstaller`
-4. **Inno Setup 6+:** `winget install JRSoftware.InnoSetup`
-
-### Build steps
-
-```bash
-# 1. Bundle the app with PyInstaller (output in dist\Hearsay\)
-build.bat
-
-# 2. Compile the Windows installer (winget does not add ISCC to PATH)
-"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
-```
-
-The installer is written to `installer_output\HearsaySetup.exe`.
-
-The PyInstaller bundle is defined by `Hearsay.spec`; `build.bat` is a thin wrapper around it. Edit the spec to change bundled data, hidden imports, or the icon.
-
-### Releasing
-
-See [RELEASING.md](RELEASING.md) for instructions on creating GitHub releases with the installer attached. This is a reference for the author and LLM when updating the application.
+| Live Interview | Lecture Mode | Past Meeting Review |
+|:---:|:---:|:---:|
+| ![Interview](website/public/screenshots/Interview.png) | ![Lecture](website/public/screenshots/Lecture.png) | ![Past Meeting](website/public/screenshots/Past-meeting.png) |
 
 ## Tech Stack
 
-- **Python 3.11+**
-- **faster-whisper** -- CTranslate2-based Whisper inference
-- **PyAudioWPatch** -- WASAPI loopback recording
-- **sounddevice** -- Microphone capture
-- **customtkinter** -- Modern UI
-- **pystray + Pillow** -- System tray
-- **PyInstaller + Inno Setup** -- Build and install
+| Layer | Technology |
+|-------|-----------|
+| Desktop | Tauri 2 (Rust + WebView2) |
+| Frontend | React 18, TypeScript 5.5, Vite 6 |
+| State | Zustand 4.5 |
+| Styling | Tailwind CSS 3.4, shadcn/ui |
+| Audio | cpal, WASAPI (Windows loopback) |
+| STT | whisper-rs, ONNX Runtime, Deepgram, Groq, Web Speech API |
+| LLM | OpenAI, Anthropic, Groq, Ollama, LM Studio, Gemini |
+| Database | SQLite (rusqlite) |
 
-## Contact
+## Development
 
-Robert Parks<br>
-[raparks.com](https://raparks.com/)
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 20+
+- [Rust](https://www.rust-lang.org/tools/install) (stable toolchain)
+- [Tauri CLI](https://v2.tauri.app/start/prerequisites/) (`npm install -g @tauri-apps/cli`)
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/VahidAlizadeh/NexQ.git
+cd NexQ
+
+# Install frontend dependencies
+npm install
+
+# Run in development mode (launches Rust backend + React frontend)
+npx tauri dev
+
+# Build production installer
+npx tauri build
+```
+
+### Other Commands
+
+```bash
+npm run dev       # Vite dev server only (port 5173)
+npm run build     # TypeScript check + Vite production build
+```
+
+## Windows SmartScreen
+
+When you first run NexQ, Windows SmartScreen may display a warning. This is normal for open-source applications that are not code-signed. To proceed:
+
+1. Click **"More info"**
+2. Click **"Run anyway"**
+
+Code signing certificates are expensive and not feasible for most open-source projects. The application is safe to run — you can verify by building from source.
+
+## Contributing
+
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-MIT -- free to use, modify, and distribute for any purpose (personal or commercial). See [LICENSE](LICENSE) for full text.
+[MIT License](LICENSE) — free forever.
+
+## Acknowledgments
+
+- [Tauri](https://tauri.app/) — desktop application framework
+- [React](https://react.dev/) — user interface library
+- [whisper-rs](https://github.com/tazz4843/whisper-rs) — Rust bindings for OpenAI Whisper
+- [Deepgram](https://deepgram.com/) — speech-to-text API
+- [shadcn/ui](https://ui.shadcn.com/) — UI component library
