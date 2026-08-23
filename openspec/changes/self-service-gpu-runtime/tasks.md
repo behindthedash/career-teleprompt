@@ -24,7 +24,7 @@
 - [x] 4.4 Keep frozen diagnostics smoke coverage aware of the optional runtime installer.
 
 ## 5. Verification
-- [ ] 5.1 Run Ruff lint, Ruff format-check, and pytest on Windows Python 3.11 and 3.14.
-- [ ] 5.2 Build the frozen Windows app and installer and pass packaged diagnostics smoke.
+- [x] 5.1 Run Ruff lint, Ruff format-check, and pytest on Windows Python 3.11 and 3.14. (CI run #75 passed both matrix legs.)
+- [x] 5.2 Build the frozen Windows app and installer and pass packaged diagnostics smoke. (CI run #75 passed the frozen diagnostics smoke, built `HearsaySetup.exe`, and uploaded the installer artifact.)
 - [ ] 5.3 Install GPU Support through packaged Hearsay on representative NVIDIA hardware without manual CUDA/PATH setup.
 - [ ] 5.4 Pass isolated CUDA preflight and complete the >=3-minute NVIDIA GPU performance sample required by live-performance-diagnostics 5.4 / low-latency-transcription-profile 4.3.
