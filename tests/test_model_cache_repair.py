@@ -38,10 +38,7 @@ def _downloader(calls: list[Path]):
 def test_legacy_huggingface_snapshot_is_not_considered_ready(monkeypatch, tmp_path) -> None:
     model_root = tmp_path / "models"
     legacy_snapshot = (
-        model_root
-        / "models--Systran--faster-whisper-small.en"
-        / "snapshots"
-        / "synthetic-revision"
+        model_root / "models--Systran--faster-whisper-small.en" / "snapshots" / "synthetic-revision"
     )
     _write_model_payload(legacy_snapshot)
     monkeypatch.setattr(model_manager, "get_models_dir", lambda: model_root)
@@ -163,9 +160,7 @@ def test_repair_does_not_follow_error_path_outside_hearsay(monkeypatch, tmp_path
         nonlocal calls
         calls += 1
         if calls == 1:
-            raise RuntimeError(
-                "Unable to open file 'model.bin' in model " f"'{outside}'"
-            )
+            raise RuntimeError(f"Unable to open file 'model.bin' in model '{outside}'")
         return object()
 
     model_manager.load_model_with_repair(
