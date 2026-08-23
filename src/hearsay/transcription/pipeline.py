@@ -7,6 +7,7 @@ import logging
 import queue
 import string
 import time
+from collections.abc import Callable
 
 from hearsay.audio.recorder import AudioChunk
 from hearsay.constants import AUDIO_SOURCE_MIC, AUDIO_SOURCE_SYSTEM
@@ -17,33 +18,29 @@ log = logging.getLogger(__name__)
 
 
 class TranscriptionPipeline(StoppableThread):
-    """Daemon thread that reads AudioChunk windows from audio_queue,
-    transcribes each source in the window separately, and pushes one
-    merged, source-tagged TranscriptionResult per window to
-    transcript_queue.
+    """Consume audio windows and emit merged source-tagged transcript results."""
 
-    Args:
-        audio_queue: Input queue of AudioChunk objects.
-        transcript_queue: Output queue of TranscriptionResult objects.
-        engine: Configured TranscriptionEngine (model already loaded).
-    """
-
-    _TAIL_WORD_COUNT = 15  # words kept from previous chunk for overlap matching
-    _MIN_MATCH_WORDS = 2  # minimum overlap length to avoid false positives
-    _MIN_ECHO_WORDS = 4  # minimum length before a mic segment can be dropped as echo
-    _ECHO_MATCH_RATIO = 0.8  # fraction of mic words matching system text => echo
+    _TAIL_WORD_COUNT = 15
+    _MIN_MATCH_WORDS = 2
+    _MIN_ECHO_WORDS = 4
+    _ECHO_MATCH_RATIO = 0.8
 
     def __init__(
         self,
         audio_queue: queue.Queue,
         transcript_queue: queue.Queue,
         engine: TranscriptionEngine,
+        *,
+        drain_on_stop: bool = True,
+        on_error: Callable[[Exception], None] | None = None,
     ) -> None:
         super().__init__(name="TranscriptionPipeline")
         self.audio_queue = audio_queue
         self.transcript_queue = transcript_queue
         self.engine = engine
-        self._prev_tails: dict[str, list[str]] = {}  # source -> tail words
+        self.drain_on_stop = drain_on_stop
+        self.on_error = on_error
+        self._prev_tails: dict[str, list[str]] = {}
 
     def run(self) -> None:
         log.info("TranscriptionPipeline started")
@@ -54,21 +51,32 @@ class TranscriptionPipeline(StoppableThread):
                 continue
             self._process_window(chunk)
 
-        # Drain any audio chunks still in the queue after stop signal.
-        # The recorder flushes its buffer before exiting, so these chunks
-        # must be transcribed to avoid losing the tail of the recording.
-        log.info("TranscriptionPipeline draining remaining audio chunks")
-        while True:
-            try:
-                chunk = self.audio_queue.get_nowait()
-            except queue.Empty:
-                break
-            self._process_window(chunk)
+        if self.drain_on_stop:
+            # Normal persisted recording preserves the recorder's final flush.
+            log.info("TranscriptionPipeline draining remaining audio chunks")
+            while True:
+                try:
+                    chunk = self.audio_queue.get_nowait()
+                except queue.Empty:
+                    break
+                self._process_window(chunk)
+        else:
+            # Diagnostics cancellation values prompt recovery over tail fidelity.
+            # Never execute additional native inference after cancellation.
+            discarded = 0
+            while True:
+                try:
+                    self.audio_queue.get_nowait()
+                    discarded += 1
+                except queue.Empty:
+                    break
+            if discarded:
+                log.info("Discarded %d queued diagnostic audio windows on stop", discarded)
 
         log.info("TranscriptionPipeline stopped")
 
-    def _process_window(self, chunk: AudioChunk) -> None:
-        """Transcribe each source in one window and enqueue a merged result."""
+    def _process_window(self, chunk: AudioChunk) -> bool:
+        """Transcribe one window; return whether inference completed successfully."""
         try:
             t0 = time.perf_counter()
             tagged_segments: list[dict] = []
@@ -113,7 +121,7 @@ class TranscriptionPipeline(StoppableThread):
                 merged_text[:80] if merged_text else "(empty)",
             )
             if not tagged_segments:
-                return
+                return True
 
             self.transcript_queue.put(
                 TranscriptionResult(
@@ -125,8 +133,15 @@ class TranscriptionPipeline(StoppableThread):
                     window_start=chunk.window_start,
                 )
             )
-        except Exception:
+            return True
+        except Exception as exc:
             log.error("Transcription failed for chunk %d", chunk.index, exc_info=True)
+            if self.on_error is not None:
+                try:
+                    self.on_error(exc)
+                except Exception:
+                    log.error("Transcription error callback failed", exc_info=True)
+            return False
 
     @staticmethod
     def _normalize(word: str) -> str:
@@ -138,16 +153,7 @@ class TranscriptionPipeline(StoppableThread):
         return [w for w in (cls._normalize(t).lower() for t in text.split()) if w]
 
     def _is_echo(self, text: str, system_words: list[str]) -> bool:
-        """True if *text* mostly repeats this window's system audio.
-
-        Without headphones the microphone picks up the speakers, so remote
-        speech shows up a second time on the mic stream — usually with
-        small recognition differences ("fox" heard as "box"), so matching
-        is fuzzy: if >= _ECHO_MATCH_RATIO of the mic segment's words match
-        the system text in order, it is treated as echo. Short segments
-        (< _MIN_ECHO_WORDS words) are never dropped so genuine brief
-        replies like "yes, exactly" survive.
-        """
+        """True if *text* mostly repeats this window's system audio."""
         words = self._normalized_words(text)
         if len(words) < self._MIN_ECHO_WORDS or not system_words:
             return False
@@ -163,21 +169,17 @@ class TranscriptionPipeline(StoppableThread):
         result: TranscriptionResult,
         prev_tail: list[str],
     ) -> TranscriptionResult:
-        """Remove overlapping prefix from *result* that duplicates the tail of the previous chunk."""
+        """Remove overlapping prefix from *result* that duplicates the previous tail."""
         new_words = result.text.split()
         if len(new_words) < self._MIN_MATCH_WORDS:
             return result
 
-        # Find the longest prefix of new_words that matches a suffix of prev_tail.
         best = 0
         for length in range(self._MIN_MATCH_WORDS, min(len(prev_tail), len(new_words)) + 1):
             suffix = prev_tail[-length:]
             prefix = new_words[:length]
             tail = [self._normalize(w).lower() for w in suffix]
             head = [self._normalize(w).lower() for w in prefix]
-            # All words after the first must match exactly; the first word of the
-            # new chunk may be truncated (e.g. "replaced" -> "placed") so allow a
-            # suffix-of-word match when the fragment is at least 3 characters.
             first_ok = tail[0] == head[0] or (len(head[0]) >= 3 and tail[0].endswith(head[0]))
             if first_ok and tail[1:] == head[1:]:
                 best = length
@@ -202,14 +204,13 @@ class TranscriptionPipeline(StoppableThread):
                 chunk_index=result.chunk_index,
             )
 
-        # Rebuild text and trim leading segments that were fully covered by the overlap.
         new_text = " ".join(stripped_words)
-        chars_removed = len(" ".join(new_words[:best])) + 1  # +1 for the space after
+        chars_removed = len(" ".join(new_words[:best])) + 1
         trimmed_segments = []
         for seg in result.segments:
             seg_text = seg["text"]
             if chars_removed >= len(seg_text):
-                chars_removed -= len(seg_text) + 1  # +1 for joining space
+                chars_removed -= len(seg_text) + 1
                 continue
             if chars_removed > 0:
                 seg = {**seg, "text": seg_text[chars_removed:].lstrip()}

@@ -17,6 +17,7 @@ if str(SRC) not in sys.path:
 # project imports intentionally follow the source-path setup above.
 # ruff: noqa: E402
 from hearsay.config import AppConfig
+from hearsay.diagnostics.gpu_preflight import GPUPreflightResult
 from hearsay.diagnostics.performance import (
     DiagnosticObservation,
     DiagnosticResult,
@@ -260,12 +261,31 @@ class _FakeComponent:
         return self.alive
 
 
-def _runner_harness(tmp_path, *, inference=CPU, fail_load: bool = False):
+class _StuckPipeline(_FakeComponent):
+    def stop(self) -> None:
+        pass
+
+    def join(self, timeout=None) -> None:
+        pass
+
+
+def _runner_harness(
+    tmp_path,
+    *,
+    inference=CPU,
+    fail_load: bool = False,
+    preflight_result: GPUPreflightResult | None = None,
+    stuck_pipeline: bool = False,
+):
     captured: dict[str, object] = {}
     results = []
     progress = []
     config = AppConfig(output_dir=str(tmp_path), model_name="medium", device="cpu")
     original = asdict(config)
+    preflight_result = preflight_result or GPUPreflightResult(
+        ok=True,
+        message="GPU inference preflight passed.",
+    )
 
     def engine_factory(**kwargs):
         engine = _FakeEngine(fail_load=fail_load, **kwargs)
@@ -273,9 +293,11 @@ def _runner_harness(tmp_path, *, inference=CPU, fail_load: bool = False):
         return engine
 
     def pipeline_factory(**kwargs):
-        pipeline = _FakeComponent(**kwargs)
+        component_type = _StuckPipeline if stuck_pipeline else _FakeComponent
+        pipeline = component_type(**kwargs)
         captured["pipeline"] = pipeline
         captured["metric_callback"] = kwargs["on_metrics"]
+        captured["pipeline_error_callback"] = kwargs["on_error"]
         return pipeline
 
     def recorder_factory(**kwargs):
@@ -283,6 +305,16 @@ def _runner_harness(tmp_path, *, inference=CPU, fail_load: bool = False):
         captured["recorder"] = recorder
         captured["fatal_callback"] = kwargs["on_fatal"]
         return recorder
+
+    def model_preparer(name, progress_callback=None):
+        captured["prepared_model"] = name
+        if progress_callback:
+            progress_callback("Synthetic model ready.")
+        return tmp_path / f"local-{name}"
+
+    def gpu_preflight(name, compute_type, *, stop_event):
+        captured["gpu_preflight"] = (name, compute_type, stop_event)
+        return preflight_result
 
     runner = DiagnosticRunner(
         app_config=config,
@@ -295,6 +327,9 @@ def _runner_harness(tmp_path, *, inference=CPU, fail_load: bool = False):
         engine_factory=engine_factory,
         pipeline_factory=pipeline_factory,
         recorder_factory=recorder_factory,
+        gpu_preflight=gpu_preflight,
+        model_preparer=model_preparer,
+        pipeline_stop_timeout_s=0.02,
     )
     return runner, captured, results, progress, config, original
 
@@ -317,6 +352,8 @@ def test_runner_uses_live_only_profile_fixed_inference_and_does_not_mutate_confi
     assert engine.kwargs["device"] == "cpu"
     assert engine.kwargs["compute_type"] == "int8"
     assert pipeline.kwargs["profile"] is LIVE_TRANSCRIPTION_PROFILE
+    assert pipeline.kwargs["drain_on_stop"] is False
+    assert callable(pipeline.kwargs["on_error"])
     assert recorder.kwargs["profile"] is LIVE_TRANSCRIPTION_PROFILE
     assert asdict(config) == original
 
@@ -344,6 +381,43 @@ def test_runner_uses_live_only_profile_fixed_inference_and_does_not_mutate_confi
     assert results[0].suitability is Suitability.SUITABLE
     assert not list(tmp_path.glob("*.md"))
     assert asdict(config) == original
+
+
+def test_gpu_runner_prepares_and_preflights_before_live_capture(tmp_path) -> None:
+    runner, captured, results, _, _, _ = _runner_harness(tmp_path, inference=GPU)
+
+    runner.start()
+    _wait_for(lambda: runner.state is DiagnosticRunnerState.RUNNING)
+
+    assert captured["prepared_model"] == "turbo"
+    preflight = captured["gpu_preflight"]
+    assert preflight[0:2] == ("turbo", "float16")
+    engine = captured["engine"]
+    assert isinstance(engine, _FakeEngine)
+    assert engine.loaded is True
+
+    runner.stop(cancelled=True)
+    _wait_for(lambda: bool(results))
+
+
+def test_gpu_preflight_failure_never_starts_engine_or_capture(tmp_path) -> None:
+    runner, captured, results, _, _, _ = _runner_harness(
+        tmp_path,
+        inference=GPU,
+        preflight_result=GPUPreflightResult(
+            ok=False,
+            message="NVIDIA GPU detected, but CUDA inference is not ready.",
+        ),
+    )
+
+    runner.start()
+    _wait_for(lambda: bool(results))
+
+    assert results[0].status is DiagnosticStatus.FAILED
+    assert "CUDA inference is not ready" in (results[0].message or "")
+    assert "engine" not in captured
+    assert "pipeline" not in captured
+    assert "recorder" not in captured
 
 
 def test_runner_cancel_before_target_is_incomplete_and_unclassified(tmp_path) -> None:
@@ -388,6 +462,20 @@ def test_runner_surfaces_model_load_failure_without_completed_result(tmp_path) -
     assert "synthetic CUDA load failure" in (results[0].message or "")
 
 
+def test_runner_surfaces_pipeline_inference_failure(tmp_path) -> None:
+    runner, captured, results, _, _, _ = _runner_harness(tmp_path)
+    runner.start()
+    _wait_for(lambda: runner.state is DiagnosticRunnerState.RUNNING)
+
+    error_callback = captured["pipeline_error_callback"]
+    assert callable(error_callback)
+    error_callback(RuntimeError("cublas64_12.dll could not be loaded"))
+    _wait_for(lambda: bool(results))
+
+    assert results[0].status is DiagnosticStatus.FAILED
+    assert "cublas64_12.dll" in (results[0].message or "")
+
+
 def test_runner_surfaces_recorder_failure_without_suitability(tmp_path) -> None:
     runner, captured, results, _, _, _ = _runner_harness(tmp_path)
     runner.start()
@@ -401,3 +489,19 @@ def test_runner_surfaces_recorder_failure_without_suitability(tmp_path) -> None:
     assert results[0].status is DiagnosticStatus.FAILED
     assert results[0].suitability is None
     assert "synthetic device failure" in (results[0].message or "")
+
+
+def test_wedged_pipeline_returns_result_and_requires_restart(tmp_path) -> None:
+    runner, captured, results, _, _, _ = _runner_harness(tmp_path, stuck_pipeline=True)
+    runner.start()
+    _wait_for(lambda: runner.state is DiagnosticRunnerState.RUNNING)
+
+    engine = captured["engine"]
+    assert isinstance(engine, _FakeEngine)
+    runner.stop(cancelled=True)
+    _wait_for(lambda: bool(results))
+
+    assert results[0].status is DiagnosticStatus.FAILED
+    assert "restart Hearsay" in (results[0].message or "")
+    assert runner.restart_required is True
+    assert engine.unloaded is False
