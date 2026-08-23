@@ -69,8 +69,22 @@ Before changing the 4s/1s baseline, run representative live speech through the i
 
 | Device | Compute | Model | Result |
 | --- | --- | --- | --- |
-| CPU-only | `int8` | `small.en` | pending |
-| NVIDIA GPU | `float16` | `turbo` | pending |
+| CPU — Intel64 Family 6 Model 186 | `int8` | `small.en` | 3.41 min; aggregate RTF 0.92x; p95 0.99x; max backlog 2; 94.2% healthy; longest behind streak 2; **Marginal** |
+| NVIDIA RTX 4060 Laptop GPU (8 GB) | `float16` | `turbo` | pending — v1.1.7 first-inference run wedged and is not valid profiling evidence |
+
+### Recorded CPU validation — 2026-08-23
+
+- packaged application: Hearsay 1.1.7
+- source: both
+- sample: 3.41 minutes across 52 observations
+- aggregate/median/p95/max RTF: 0.92x / 0.92x / 0.99x / 2.10x
+- maximum backlog: 2
+- healthy observations: 49/52 (94.2%)
+- behind observations: 3
+- longest behind streak: 2
+- assessment: **Marginal**
+
+The v1.1.7 GPU attempt is not counted as profiling evidence. It reached the first 4-second inference window and wedged, and cancelling the test did not return a diagnostic result. Hearsay 1.1.8 adds an isolated, timeout-bounded CUDA inference preflight before capture plus bounded in-process cancellation before the GPU validation is retried.
 
 For each configuration:
 
