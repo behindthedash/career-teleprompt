@@ -49,6 +49,24 @@ def is_model_downloaded(name: str) -> bool:
     return _contains_model_payload(_materialized_model_dir(name, get_models_dir()))
 
 
+def ensure_model_materialized(
+    name: str,
+    progress_callback: Callable[[str], None] | None = None,
+    *,
+    model_downloader: ModelDownloader | None = None,
+) -> Path:
+    """Return a complete Hearsay-owned local model directory, downloading if needed."""
+    _validate_model_name(name)
+    model_dir = get_models_dir()
+    model_dir.mkdir(parents=True, exist_ok=True)
+    return _ensure_materialized_model(
+        name,
+        model_dir,
+        status_callback=progress_callback,
+        model_downloader=model_downloader,
+    )
+
+
 def load_model_with_repair(
     name: str,
     *,
@@ -127,15 +145,7 @@ def download_model(
     progress_callback: Callable[[str], None] | None = None,
 ) -> str:
     """Download/materialize a model if needed and return its model name."""
-    _validate_model_name(name)
-
-    model_dir = get_models_dir()
-    model_dir.mkdir(parents=True, exist_ok=True)
-    _ensure_materialized_model(
-        name,
-        model_dir,
-        status_callback=progress_callback,
-    )
+    ensure_model_materialized(name, progress_callback)
     return name
 
 
