@@ -4,6 +4,7 @@ import { useScenarioStore } from "../stores/scenarioStore";
 import { useCallLogStore } from "../stores/callLogStore";
 import { useAIActionsStore } from "../stores/aiActionsStore";
 import { useTranslationStore } from "../stores/translationStore";
+import { useOverlayLayoutStore } from "../stores/overlayLayoutStore";
 import { showToast } from "../stores/toastStore";
 import { translateBatch } from "../lib/ipc";
 import { TranscriptPanel } from "./TranscriptPanel";
@@ -47,8 +48,6 @@ import {
 } from "lucide-react";
 import { formatDuration } from "../lib/utils";
 
-type OverlayLayoutMode = "split" | "ai" | "transcript" | "teleprompt";
-
 export function OverlayView() {
   const activeMeeting = useMeetingStore((state) => state.activeMeeting);
   const elapsedMs = useMeetingStore((state) => state.elapsedMs);
@@ -61,7 +60,10 @@ export function OverlayView() {
   const [devLogOpen, setDevLogOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [bookmarksOpen, setBookmarksOpen] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<OverlayLayoutMode>("split");
+  const layoutMode = useOverlayLayoutStore((state) => state.layoutMode);
+  const setLayoutMode = useOverlayLayoutStore((state) => state.setLayoutMode);
+  const cycleLayout = useOverlayLayoutStore((state) => state.cycleLayout);
+  const toggleTeleprompter = useOverlayLayoutStore((state) => state.toggleTeleprompter);
   const toggleLog = useCallLogStore((state) => state.toggleOpen);
   const logOpen = useCallLogStore((state) => state.isOpen);
   const autoTrigger = useAIActionsStore((state) => state.configs.globalDefaults.autoTrigger);
@@ -80,15 +82,6 @@ export function OverlayView() {
   const targetLang = useTranslationStore((state) => state.targetLang);
   const batchProgress = useTranslationStore((state) => state.batchProgress);
   const isBatchTranslating = batchProgress !== null;
-
-  const cycleLayout = () => {
-    setLayoutMode((mode) => {
-      if (mode === "teleprompt") return "split";
-      if (mode === "split") return "ai";
-      if (mode === "ai") return "transcript";
-      return "split";
-    });
-  };
 
   const cycleOpacity = () => {
     const presets = [0.9, 0.65, 0.35, 0.1];
@@ -251,7 +244,7 @@ export function OverlayView() {
           <HeaderBtn
             icon={<BookOpenText className="h-3.5 w-3.5" />}
             active={layoutMode === "teleprompt"}
-            onClick={() => setLayoutMode((mode) => (mode === "teleprompt" ? "split" : "teleprompt"))}
+            onClick={toggleTeleprompter}
             tooltip="Teleprompter"
           />
           <div className="mx-0.5 h-3.5 w-px bg-border/20" />
