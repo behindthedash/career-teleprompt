@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from hearsay.output.markdown_writer import MarkdownWriter
+if TYPE_CHECKING:
+    from hearsay.output.markdown_writer import MarkdownWriter
 
 
 class SessionOutputMode(str, Enum):
@@ -23,4 +25,7 @@ def create_session_writer(
     mode = SessionOutputMode(output_mode)
     if mode is SessionOutputMode.LIVE_ONLY:
         return None
+
+    from hearsay.output.markdown_writer import MarkdownWriter
+
     return MarkdownWriter(output_dir)
