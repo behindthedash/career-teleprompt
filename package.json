@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "npm run test:teleprompter",
-    "test:teleprompter": "tsc -p tsconfig.teleprompter-test.json && node tests/teleprompter-content.test.mjs && node tests/teleprompter-follower.test.mjs && node tests/teleprompter-display.test.mjs && node -e \"require('fs').rmSync('.tmp-teleprompter-tests',{recursive:true,force:true})\"",
+    "test:teleprompter": "tsc -p tsconfig.teleprompter-test.json && node tests/teleprompter-content.test.mjs && node tests/teleprompter-follower.test.mjs && node tests/teleprompter-display.test.mjs && node tests/teleprompter-handoff.test.mjs && node -e \"require('fs').rmSync('.tmp-teleprompter-tests',{recursive:true,force:true})\"",
     "preview": "vite preview",
     "tauri": "tauri",
     "release": "node scripts/release.js",
