@@ -1,0 +1,41 @@
+name: Ruff baseline cleanup
+
+on:
+  push:
+    branches: [ci/required-quality-gate]
+
+permissions:
+  contents: write
+
+jobs:
+  baseline:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ci/required-quality-gate
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.11"
+
+      - name: Install Ruff
+        run: pip install ruff==0.16.1
+
+      - name: Apply Ruff baseline cleanup
+        run: python scripts/apply_ruff_baseline.py
+
+      - name: Commit baseline
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src tests scripts
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "style: establish Ruff baseline"
+            git push origin HEAD:ci/required-quality-gate
+          }
