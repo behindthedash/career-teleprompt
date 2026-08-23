@@ -70,7 +70,7 @@ Before changing the 4s/1s baseline, run representative live speech through the i
 | Device | Compute | Model | Result |
 | --- | --- | --- | --- |
 | CPU — Intel64 Family 6 Model 186 | `int8` | `small.en` | 3.41 min; aggregate RTF 0.92x; p95 0.99x; max backlog 2; 94.2% healthy; longest behind streak 2; **Marginal** |
-| NVIDIA RTX 4060 Laptop GPU (8 GB) | `float16` | `turbo` | pending — v1.1.7 first-inference run wedged and is not valid profiling evidence |
+| NVIDIA GeForce RTX 4060 Laptop GPU (8 GB) | `float16` | `turbo` | 3.65 min; aggregate RTF 0.24x; p95 0.27x; max backlog 0; 100% healthy; longest behind streak 0; **Suitable** |
 
 ### Recorded CPU validation — 2026-08-23
 
@@ -84,7 +84,23 @@ Before changing the 4s/1s baseline, run representative live speech through the i
 - longest behind streak: 2
 - assessment: **Marginal**
 
-The v1.1.7 GPU attempt is not counted as profiling evidence. It reached the first 4-second inference window and wedged, and cancelling the test did not return a diagnostic result. Hearsay 1.1.8 adds an isolated, timeout-bounded CUDA inference preflight before capture plus bounded in-process cancellation before the GPU validation is retried.
+### Recorded NVIDIA GPU validation — 2026-08-23
+
+- packaged application: Hearsay 1.1.9
+- source: both
+- GPU: NVIDIA GeForce RTX 4060 Laptop GPU (8 GB VRAM)
+- configuration: `turbo/cuda/float16`
+- profile: live (4s/1s)
+- sample: 3.65 minutes across 55 observations
+- aggregate/median/p95/max RTF: 0.24x / 0.25x / 0.27x / 0.33x
+- maximum backlog: 0
+- healthy observations: 55/55 (100.0%)
+- behind observations: 0
+- longest behind streak: 0
+- assessment: **Suitable**
+- GPU support path: installed through Hearsay's packaged self-service GPU-support workflow; no manual CUDA toolkit installation or PATH configuration was required
+
+The earlier Hearsay 1.1.7 GPU attempt remains useful failure-history evidence but is not counted as profiling evidence: it reached the first 4-second inference window and wedged. Hearsay 1.1.8 added an isolated, timeout-bounded CUDA inference preflight, and Hearsay 1.1.9 added the self-service NVIDIA runtime installation needed for the packaged application to pass preflight and complete the representative GPU sample above.
 
 For each configuration:
 
