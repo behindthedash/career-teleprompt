@@ -102,9 +102,7 @@ def test_missing_file_load_error_repairs_cache_and_retries_once(monkeypatch, tmp
     def factory(*args, **kwargs):
         calls.append((args, kwargs))
         if len(calls) == 1:
-            raise RuntimeError(
-                f"Unable to open file 'tokenizer.json' in model '{snapshot}'"
-            )
+            raise RuntimeError(f"Unable to open file 'tokenizer.json' in model '{snapshot}'")
         assert not cache.exists()
         return sentinel
 
