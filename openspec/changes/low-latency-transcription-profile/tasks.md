@@ -13,4 +13,4 @@
 ## 4. Validation
 - [x] 4.1 Regression-test normal 30s behavior.
 - [x] 4.2 Add a reproducible content-free report harness for live-session RTF/backlog profiling.
-- [ ] 4.3 Run representative several-minute live profiling on Windows CPU and NVIDIA GPU configurations and record the result summaries.
+- [x] 4.3 Run representative several-minute live profiling on Windows CPU and NVIDIA GPU configurations and record the result summaries. (CPU: `small.en/cpu/int8`, 3.41 min, aggregate RTF 0.92x, Marginal. NVIDIA RTX 4060 Laptop GPU: `turbo/cuda/float16`, 3.65 min, aggregate RTF 0.24x, 100% healthy, Suitable.)
