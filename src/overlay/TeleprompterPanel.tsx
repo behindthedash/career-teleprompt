@@ -36,6 +36,7 @@ export function TeleprompterPanel() {
   const followingEnabled = useTeleprompterStore((state) => state.followingEnabled);
   const setDraftText = useTeleprompterStore((state) => state.setDraftText);
   const setPreparedText = useTeleprompterStore((state) => state.setPreparedText);
+  const saveCurrentAsPrepared = useTeleprompterStore((state) => state.saveCurrentAsPrepared);
   const clearDocument = useTeleprompterStore((state) => state.clearDocument);
   const beginEditing = useTeleprompterStore((state) => state.beginEditing);
   const cancelEditing = useTeleprompterStore((state) => state.cancelEditing);
@@ -195,6 +196,15 @@ export function TeleprompterPanel() {
           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-medium text-primary/80">
             {document.origin === "generated" ? "AI answer" : "Prepared"}
           </span>
+          {document.origin === "generated" && (
+            <button
+              onClick={saveCurrentAsPrepared}
+              className="rounded-full border border-primary/15 bg-primary/5 px-2 py-0.5 text-[9px] font-medium text-primary/75 transition-colors hover:bg-primary/15 hover:text-primary"
+              title="Keep this AI answer as prepared teleprompter content without changing your reading position"
+            >
+              Save as Prepared
+            </button>
+          )}
           <button
             onClick={() => setFollowingEnabled(!followingEnabled)}
             className={`rounded-full px-2 py-0.5 text-[9px] font-medium transition-colors ${statusClass}`}
