@@ -190,9 +190,7 @@ class HearsayApp:
                 transcript_queue=transcript_queue,
                 engine=engine,
                 profile=transcription_profile,
-                on_metrics=lambda metrics: self._on_transcription_metrics(
-                    session_gen, metrics
-                ),
+                on_metrics=lambda metrics: self._on_transcription_metrics(session_gen, metrics),
             )
             self._pipeline.start()
 
@@ -485,7 +483,7 @@ class HearsayApp:
                 log.warning("Session ended with no transcript text")
                 if self._tray:
                     self._tray.notify(
-                        "Recording ended — no speech was captured. The microphone "
+                        "Recording ended with no speech captured. The microphone "
                         "or audio source may have been muted, unplugged, or blocked."
                     )
 
