@@ -17,4 +17,4 @@
 ## 4. Tests
 - [x] 4.1 Add synthetic Git-repository tests for dry-run/apply sync behavior and safety refusals.
 - [x] 4.2 Add candidate-validator tests for allowed generic patches and blocked fork/private/consumer content.
-- [ ] 4.3 Run repository Ruff and pytest quality gates on Python 3.11 and 3.14 in CI.
+- [x] 4.3 Run repository Ruff and pytest quality gates on Python 3.11 and 3.14 in CI.
