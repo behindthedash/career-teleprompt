@@ -107,6 +107,44 @@ export function generatedDocumentFromResponse(input: GeneratedDocumentInput): Te
   };
 }
 
+/**
+ * Explicitly keep an AI-generated answer as prepared teleprompter content.
+ *
+ * This is a lifecycle conversion only: authored display text and retrieval/provider provenance are
+ * preserved, while the generated/ephemeral identity is replaced by a stable prepared identity.
+ */
+export function promoteGeneratedDocumentToPrepared(
+  document: TeleprompterDocument,
+  sourceUri = `prepared://${document.id}`,
+): TeleprompterDocument {
+  if (document.origin !== "generated") {
+    throw new Error("only generated teleprompter documents can be promoted to prepared");
+  }
+  requireNonEmpty(sourceUri, "sourceUri");
+
+  const sections = buildSections(
+    sourceUri,
+    document.sections.map((section) => ({
+      ...(section.title ? { title: section.title } : {}),
+      displayText: section.displayText,
+    })),
+  );
+  if (sections.length === 0) {
+    throw new Error("teleprompter document must contain at least one section");
+  }
+
+  return {
+    id: stableId("prepared", sourceUri, sections.map((section) => section.matchText).join("\n")),
+    origin: "prepared",
+    sourceUri,
+    sections,
+    ...(document.responseSessionId ? { responseSessionId: document.responseSessionId } : {}),
+    ...(document.queryGeneration ? { queryGeneration: document.queryGeneration } : {}),
+    ...(document.evidence ? { evidence: document.evidence.map((item) => ({ ...item })) } : {}),
+    ephemeral: false,
+  };
+}
+
 function splitMarkdownSections(text: string): Array<{ title?: string; displayText: string }> {
   const sections: Array<{ title?: string; displayText: string }> = [];
   let currentTitle: string | undefined;

@@ -4,6 +4,7 @@ import {
   generatedDocumentFromResponse,
   loadPreparedDocument,
   normalizeMatchText,
+  promoteGeneratedDocumentToPrepared,
 } from "../.tmp-teleprompter-tests/content.js";
 
 assert.equal(normalizeMatchText("  HéLLo—WORLD!  42  "), "héllo world 42");
@@ -45,6 +46,34 @@ assert.equal(generated.ephemeral, true);
 assert.equal(generated.sourceUri, "response://session-1/2");
 assert.equal(generated.evidence?.length, 1);
 
+const promoted = promoteGeneratedDocumentToPrepared(generated);
+assert.equal(promoted.origin, "prepared");
+assert.equal(promoted.ephemeral, false);
+assert.equal(promoted.sourceUri, `prepared://${generated.id}`);
+assert.notEqual(promoted.id, generated.id);
+assert.equal(promoted.sections[0].displayText, generated.sections[0].displayText);
+assert.equal(promoted.sections[0].matchText, generated.sections[0].matchText);
+assert.notEqual(promoted.sections[0].id, generated.sections[0].id);
+assert.equal(promoted.sections[0].sourceUri, promoted.sourceUri);
+assert.equal(promoted.responseSessionId, generated.responseSessionId);
+assert.equal(promoted.queryGeneration, generated.queryGeneration);
+assert.deepEqual(promoted.evidence, generated.evidence);
+assert.notEqual(promoted.evidence, generated.evidence, "promotion must copy provenance rather than alias it");
+
+const promotedAtExplicitUri = promoteGeneratedDocumentToPrepared(
+  generated,
+  "prepared://interview/why-this-role",
+);
+assert.equal(promotedAtExplicitUri.sourceUri, "prepared://interview/why-this-role");
+
+assert.throws(
+  () => promoteGeneratedDocumentToPrepared(plain),
+  /only generated teleprompter documents/,
+);
+assert.throws(
+  () => promoteGeneratedDocumentToPrepared(generated, "   "),
+  /sourceUri/,
+);
 assert.throws(
   () => loadPreparedDocument("   ", "file:///blank.txt"),
   /at least one section/,
