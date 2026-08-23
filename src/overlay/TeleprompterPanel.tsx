@@ -8,16 +8,21 @@ import {
   Plus,
   RotateCcw,
 } from "lucide-react";
+import { useTeleprompterFollower } from "../hooks/useTeleprompterFollower";
 import { useTeleprompterStore } from "../stores/teleprompterStore";
 import type { TeleprompterFormat } from "../teleprompter/content";
 
 export function TeleprompterPanel() {
+  useTeleprompterFollower();
+
   const document = useTeleprompterStore((state) => state.document);
   const draftText = useTeleprompterStore((state) => state.draftText);
   const activeSectionIndex = useTeleprompterStore((state) => state.activeSectionIndex);
   const fontSize = useTeleprompterStore((state) => state.fontSize);
   const lineHeight = useTeleprompterStore((state) => state.lineHeight);
   const isEditing = useTeleprompterStore((state) => state.isEditing);
+  const followerStatus = useTeleprompterStore((state) => state.followerStatus);
+  const followingEnabled = useTeleprompterStore((state) => state.followingEnabled);
   const setDraftText = useTeleprompterStore((state) => state.setDraftText);
   const setPreparedText = useTeleprompterStore((state) => state.setPreparedText);
   const clearDocument = useTeleprompterStore((state) => state.clearDocument);
@@ -28,6 +33,7 @@ export function TeleprompterPanel() {
   const increaseFontSize = useTeleprompterStore((state) => state.increaseFontSize);
   const decreaseFontSize = useTeleprompterStore((state) => state.decreaseFontSize);
   const setLineHeight = useTeleprompterStore((state) => state.setLineHeight);
+  const setFollowingEnabled = useTeleprompterStore((state) => state.setFollowingEnabled);
 
   const [format, setFormat] = useState<TeleprompterFormat>("text");
   const [error, setError] = useState<string | null>(null);
@@ -138,6 +144,21 @@ export function TeleprompterPanel() {
           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-medium text-primary/80">
             {document.origin === "generated" ? "AI answer" : "Prepared"}
           </span>
+          <button
+            onClick={() => setFollowingEnabled(!followingEnabled)}
+            className={`rounded-full px-2 py-0.5 text-[9px] font-medium transition-colors ${
+              followingEnabled
+                ? followerStatus === "lost"
+                  ? "bg-destructive/10 text-destructive/80"
+                  : followerStatus === "uncertain"
+                    ? "bg-warning/10 text-warning/80"
+                    : "bg-success/10 text-success/80"
+                : "bg-muted/20 text-muted-foreground/50"
+            }`}
+            title={followingEnabled ? "Pause speech following" : "Resume speech following"}
+          >
+            {followingEnabled ? (followerStatus === "idle" ? "Follow ready" : `Follow ${followerStatus}`) : "Follow paused"}
+          </button>
           {sections.length > 1 && (
             <span className="text-[10px] tabular-nums text-muted-foreground/45">
               {activeSectionIndex + 1}/{sections.length}
@@ -222,7 +243,9 @@ export function TeleprompterPanel() {
           <ChevronUp className="h-3.5 w-3.5" />
           Previous
         </button>
-        <span className="text-[10px] text-muted-foreground/40">Manual mode</span>
+        <span className="text-[10px] text-muted-foreground/40">
+          {followingEnabled ? "Speech follow enabled" : "Manual mode"}
+        </span>
         <button
           onClick={nextSection}
           disabled={!canGoForward}
