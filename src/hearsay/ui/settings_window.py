@@ -8,7 +8,7 @@ from tkinter import filedialog
 import customtkinter as ctk
 
 from hearsay.audio.devices import list_input_devices, list_loopback_devices
-from hearsay.config import ConfigManager
+from hearsay.config import AppConfig, ConfigManager
 from hearsay.constants import (
     APP_NAME,
     AUDIO_SOURCE_BOTH,
@@ -16,6 +16,7 @@ from hearsay.constants import (
     AUDIO_SOURCE_SYSTEM,
     MODEL_TABLE,
 )
+from hearsay.ui.performance_window import PerformanceDiagnosticsWindow
 from hearsay.ui.window_icon import apply_window_icon
 
 log = logging.getLogger(__name__)
@@ -69,6 +70,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self._config_manager = config_manager
         self._config = config_manager.config
+        self._diagnostics_window: PerformanceDiagnosticsWindow | None = None
 
         self._build_ui()
         self.grab_set()
@@ -198,6 +200,12 @@ class SettingsWindow(ctk.CTkToplevel):
         btn_frame = ctk.CTkFrame(self)
         btn_frame.pack(fill="x", padx=20, pady=(0, 15))
 
+        ctk.CTkButton(
+            btn_frame,
+            text="Performance Test...",
+            width=150,
+            command=self._open_performance_test,
+        ).pack(side="left", padx=5)
         ctk.CTkButton(btn_frame, text="Save", width=100, command=self._save).pack(
             side="right", padx=5
         )
@@ -212,6 +220,42 @@ class SettingsWindow(ctk.CTkToplevel):
         )
         if path:
             self._dir_var.set(path)
+
+    def _diagnostic_config_snapshot(self) -> AppConfig:
+        """Snapshot current controls without mutating the persisted recording config."""
+        return AppConfig(
+            setup_complete=self._config.setup_complete,
+            audio_source=self._source_var.get(),
+            loopback_device_name=self._sys_map.get(self._sys_var.get(), ""),
+            mic_device_name=self._mic_map.get(self._mic_var.get(), ""),
+            model_name=self._model_var.get(),
+            compute_type=self._compute_var.get(),
+            device=self._device_var.get(),
+            language=self._lang_var.get(),
+            vad_filter=self._vad_var.get(),
+            output_dir=self._dir_var.get(),
+            show_live_view_on_start=self._config.show_live_view_on_start,
+        )
+
+    def _open_performance_test(self) -> None:
+        if self._diagnostics_window is not None and self._diagnostics_window.winfo_exists():
+            self._diagnostics_window.lift()
+            return
+        try:
+            self.grab_release()
+        except Exception:
+            pass
+        self._diagnostics_window = PerformanceDiagnosticsWindow(
+            self,
+            self._diagnostic_config_snapshot(),
+            on_close=self._restore_grab,
+        )
+
+    def _restore_grab(self) -> None:
+        self._diagnostics_window = None
+        if self.winfo_exists():
+            self.grab_set()
+            self.lift()
 
     def _save(self) -> None:
         self._config.audio_source = self._source_var.get()
