@@ -117,11 +117,13 @@ impl Default for AllActionConfigs {
                 system_prompt: prompt_templates::WHAT_TO_SAY_PROMPT.to_string(),
                 is_default_prompt: true,
                 include_transcript: true,
-                include_rag_chunks: false,
+                include_rag_chunks: true,
                 include_custom_instructions: true,
                 include_detected_question: true,
                 web_search: false,
-                transcript_window_seconds: Some(60),
+                // Keep enough real interview history to recognize stories/examples already used
+                // without sending an unbounded full-meeting transcript on every generation.
+                transcript_window_seconds: Some(900),
                 rag_top_k: None,
                 temperature: None,
 
