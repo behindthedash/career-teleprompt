@@ -16,7 +16,7 @@ import shutil
 import urllib.request
 import zipfile
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event
@@ -31,6 +31,7 @@ GPU_RUNTIME_DOWNLOAD_ESTIMATE_GB = 1.3
 GPU_RUNTIME_MIN_FREE_BYTES = 4 * 1024**3
 _REQUIRED_DLLS = ("cublas64_12.dll", "cudnn64_9.dll")
 _DLL_DIRECTORY_HANDLES: list[Any] = []
+_ACTIVATED_RUNTIME_DIRS: set[str] = set()
 
 
 @dataclass(frozen=True)
@@ -109,9 +110,7 @@ def gpu_runtime_status() -> GPURuntimeStatus:
 def activate_gpu_runtime() -> bool:
     """Add Hearsay-managed NVIDIA DLLs to this process and child-process PATH."""
     status = gpu_runtime_status()
-    if not status.installed:
-        return False
-    if os.name != "nt":
+    if not status.installed or os.name != "nt":
         return False
 
     bin_text = str(status.bin_dir)
@@ -122,10 +121,10 @@ def activate_gpu_runtime() -> bool:
     # Python 3.8+ uses a restricted DLL search path on Windows. Keep the
     # returned handle alive for the lifetime of the process.
     add_dll_directory = getattr(os, "add_dll_directory", None)
-    if add_dll_directory is not None and not any(
-        getattr(handle, "path", None) == bin_text for handle in _DLL_DIRECTORY_HANDLES
-    ):
+    key = bin_text.casefold()
+    if add_dll_directory is not None and key not in _ACTIVATED_RUNTIME_DIRS:
         _DLL_DIRECTORY_HANDLES.append(add_dll_directory(bin_text))
+        _ACTIVATED_RUNTIME_DIRS.add(key)
 
     return True
 
@@ -191,7 +190,13 @@ def install_gpu_runtime(
                 f"Installing {package.project} {package.version}...",
                 base_fraction + span * 0.9,
             )
-            dll_count = _extract_runtime_payload(package, wheel_path, bin_dir, licenses)
+            dll_count = _extract_runtime_payload(
+                package,
+                wheel_path,
+                bin_dir,
+                licenses,
+                stop_event=stop_event,
+            )
             wheel_path.unlink(missing_ok=True)
             if dll_count == 0:
                 raise RuntimeError(f"{package.project} wheel contained no Windows runtime DLLs.")
@@ -323,17 +328,25 @@ def _extract_runtime_payload(
     wheel_path: Path,
     bin_dir: Path,
     licenses_dir: Path,
+    *,
+    stop_event: Event | None,
 ) -> int:
     dll_count = 0
     prefix = package.archive_prefix.casefold()
     with zipfile.ZipFile(wheel_path) as archive:
         for item in archive.infolist():
+            _check_cancelled(stop_event)
             normalized = item.filename.replace("\\", "/")
             lowered = normalized.casefold()
             if lowered.startswith(prefix) and lowered.endswith(".dll"):
                 destination = bin_dir / Path(normalized).name
                 with archive.open(item) as source, destination.open("wb") as output:
-                    shutil.copyfileobj(source, output, length=4 * 1024 * 1024)
+                    while True:
+                        _check_cancelled(stop_event)
+                        chunk = source.read(4 * 1024 * 1024)
+                        if not chunk:
+                            break
+                        output.write(chunk)
                 dll_count += 1
             elif ".dist-info/licenses/" in lowered or lowered.endswith(("/license", "/license.txt")):
                 destination = licenses_dir / package.project / Path(normalized).name
