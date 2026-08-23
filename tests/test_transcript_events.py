@@ -1,7 +1,7 @@
 """Fast logic tests for finalized transcript event creation."""
 
-from dataclasses import FrozenInstanceError
 import sys
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -9,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from hearsay.constants import AUDIO_SOURCE_MIC, AUDIO_SOURCE_SYSTEM
 from hearsay.events import TranscriptEventDispatcher, TranscriptSource
 from hearsay.transcription.engine import TranscriptionResult
-
 
 FAILURES = []
 
@@ -42,8 +41,18 @@ first = dispatcher.publish_result(
         7,
         30.0,
         [
-            {"start": 1.5, "end": 2.5, "text": "Remote question", "source": AUDIO_SOURCE_SYSTEM},
-            {"start": 3.0, "end": 4.0, "text": "Local answer", "source": AUDIO_SOURCE_MIC},
+            {
+                "start": 1.5,
+                "end": 2.5,
+                "text": "Remote question",
+                "source": AUDIO_SOURCE_SYSTEM,
+            },
+            {
+                "start": 3.0,
+                "end": 4.0,
+                "text": "Local answer",
+                "source": AUDIO_SOURCE_MIC,
+            },
         ],
     ),
 )
@@ -54,7 +63,10 @@ check([event.sequence for event in first] == [0, 1], "sequence is monotonic with
 check(first[0].source == TranscriptSource.REMOTE, "system audio maps to Remote")
 check(first[1].source == TranscriptSource.LOCAL, "microphone maps to Local")
 check(first[0].chunk_index == 7, "chunk index is retained")
-check(first[0].start_time == 31.5 and first[0].end_time == 32.5, "timing is session-relative")
+check(
+    first[0].start_time == 31.5 and first[0].end_time == 32.5,
+    "timing is session-relative",
+)
 check(all(event.final for event in first), "events are finalized")
 
 second = dispatcher.publish_result(
@@ -105,7 +117,14 @@ b_more = dispatcher.publish_result(
     result(
         1,
         30.0,
-        [{"start": 1.0, "end": 2.0, "text": "Still current", "source": AUDIO_SOURCE_SYSTEM}],
+        [
+            {
+                "start": 1.0,
+                "end": 2.0,
+                "text": "Still current",
+                "source": AUDIO_SOURCE_SYSTEM,
+            }
+        ],
     ),
 )
 check(b_more[0].sequence == 1, "ending another session does not disturb current ordering")
