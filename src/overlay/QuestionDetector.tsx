@@ -27,7 +27,8 @@ export function QuestionDetector() {
   const addQuestion = useCallback((q: DetectedQuestion) => {
     setQuestions((prev) => {
       if (prev.length > 0 && prev[0].text === q.text) return prev;
-      return [{ ...q, requestState: "idle" }, ...prev].slice(0, 10);
+      const nextQuestion: TrackedQuestion = { ...q, requestState: "idle" };
+      return [nextQuestion, ...prev].slice(0, 10);
     });
   }, []);
 
