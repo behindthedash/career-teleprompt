@@ -29,6 +29,7 @@ interface WorkflowBridge {
       cursorTokenIndex: number;
       followerStatus: string;
       followingEnabled: boolean;
+      fontSize: number;
     };
     stream: {
       isStreaming: boolean;
@@ -89,7 +90,6 @@ useMeetingStore.setState({
 
 useRagStore.setState({
   indexStatus: {
-    enabled: true,
     indexed_files: 1,
     total_files: 1,
     total_chunks: 3,
@@ -138,6 +138,7 @@ window.__CAREER_TELEPROMPT_WORKFLOW__ = {
         cursorTokenIndex: teleprompter.cursorTokenIndex,
         followerStatus: teleprompter.followerStatus,
         followingEnabled: teleprompter.followingEnabled,
+        fontSize: teleprompter.fontSize,
       },
       stream: {
         isStreaming: stream.isStreaming,
