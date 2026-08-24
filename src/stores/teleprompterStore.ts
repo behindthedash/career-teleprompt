@@ -25,6 +25,7 @@ interface TeleprompterState {
   activeSectionIndex: number;
   fontSize: number;
   lineHeight: number;
+  readingZonePercent: number;
   isEditing: boolean;
 
   followingEnabled: boolean;
@@ -46,6 +47,7 @@ interface TeleprompterState {
   increaseFontSize: () => void;
   decreaseFontSize: () => void;
   setLineHeight: (lineHeight: number) => void;
+  setReadingZonePercent: (readingZonePercent: number) => void;
 
   setFollowingEnabled: (enabled: boolean) => void;
   applyFollowerAlignment: (result: AlignmentResult) => void;
@@ -76,6 +78,7 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
   activeSectionIndex: 0,
   fontSize: initialPresentationPreferences.fontSize,
   lineHeight: initialPresentationPreferences.lineHeight,
+  readingZonePercent: initialPresentationPreferences.readingZonePercent,
   isEditing: true,
 
   followingEnabled: true,
@@ -166,6 +169,7 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
     const preferences = saveTeleprompterPreferences({
       fontSize: Math.min(MAX_FONT_SIZE, state.fontSize + FONT_STEP),
       lineHeight: state.lineHeight,
+      readingZonePercent: state.readingZonePercent,
     });
     set({ fontSize: preferences.fontSize });
   },
@@ -174,6 +178,7 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
     const preferences = saveTeleprompterPreferences({
       fontSize: Math.max(MIN_FONT_SIZE, state.fontSize - FONT_STEP),
       lineHeight: state.lineHeight,
+      readingZonePercent: state.readingZonePercent,
     });
     set({ fontSize: preferences.fontSize });
   },
@@ -182,8 +187,18 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
     const preferences = saveTeleprompterPreferences({
       fontSize: state.fontSize,
       lineHeight,
+      readingZonePercent: state.readingZonePercent,
     });
     set({ lineHeight: preferences.lineHeight });
+  },
+  setReadingZonePercent: (readingZonePercent) => {
+    const state = get();
+    const preferences = saveTeleprompterPreferences({
+      fontSize: state.fontSize,
+      lineHeight: state.lineHeight,
+      readingZonePercent,
+    });
+    set({ readingZonePercent: preferences.readingZonePercent });
   },
 
   setFollowingEnabled: (followingEnabled) =>
