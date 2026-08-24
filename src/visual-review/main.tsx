@@ -246,9 +246,12 @@ function VisualReviewScreen() {
     case "settings-modal":
       return (
         <div className="h-screen w-screen bg-background">
-          <div className="flex h-full items-center justify-center text-muted-foreground">
+          <main
+            className="flex h-full items-center justify-center text-muted-foreground"
+            aria-label="Active meeting background"
+          >
             Active meeting background
-          </div>
+          </main>
           <SettingsOverlay isModal />
         </div>
       );
