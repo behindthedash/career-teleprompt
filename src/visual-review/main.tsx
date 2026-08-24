@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import "../index.css";
+import "../contrast.css";
 import { LauncherView } from "../launcher/LauncherView";
 import { OverlayView } from "../overlay/OverlayView";
 import { SettingsOverlay } from "../settings/SettingsOverlay";
