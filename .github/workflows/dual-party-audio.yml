@@ -1,0 +1,78 @@
+name: Dual-Party Native Audio
+
+on:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
+  workflow_dispatch:
+    inputs:
+      run_hardware:
+        description: Run the self-hosted dual-party hardware probe
+        required: false
+        default: false
+        type: boolean
+      you_device:
+        description: Provisioned candidate microphone device name
+        required: false
+        type: string
+      them_device:
+        description: Provisioned interviewer endpoint device name
+        required: false
+        type: string
+      them_is_input:
+        description: Treat interviewer endpoint as an input/virtual cable
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  routing-contract:
+    name: Windows dual-party routing contract
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Run dual-party routing tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --test dual_party_audio_contract -- --nocapture
+
+  hardware-capture:
+    name: Provisioned Windows dual-party capture
+    if: github.event_name == 'workflow_dispatch' && inputs.run_hardware
+    runs-on: [self-hosted, windows, audio]
+    timeout-minutes: 20
+    env:
+      CAREER_TELEPROMPT_YOU_DEVICE: ${{ inputs.you_device }}
+      CAREER_TELEPROMPT_THEM_DEVICE: ${{ inputs.them_device }}
+      CAREER_TELEPROMPT_THEM_IS_INPUT: ${{ inputs.them_is_input }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify hardware inputs
+        shell: pwsh
+        run: |
+          if (-not $env:CAREER_TELEPROMPT_YOU_DEVICE) { throw 'you_device is required for hardware capture' }
+          if (-not $env:CAREER_TELEPROMPT_THEM_DEVICE) { throw 'them_device is required for hardware capture' }
+          Write-Host "Candidate endpoint: $env:CAREER_TELEPROMPT_YOU_DEVICE"
+          Write-Host "Interviewer endpoint: $env:CAREER_TELEPROMPT_THEM_DEVICE"
+          Write-Host 'The self-hosted runner must continuously feed non-silent fixture audio into both provisioned endpoints.'
+
+      - name: Run real native dual-party capture probe
+        run: cargo test --manifest-path src-tauri/Cargo.toml --test dual_party_audio_hardware -- --nocapture
