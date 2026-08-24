@@ -59,7 +59,7 @@ function useFavorites() {
 type MeetingFilter = "all" | "favorites" | "with_summary" | "online" | "in_person";
 
 // ════════════════════════════════════════════════════════════════
-//  NEXQ DASHBOARD
+//  CAREER TELEPROMPT DASHBOARD
 // ════════════════════════════════════════════════════════════════
 
 export function LauncherView() {
@@ -243,8 +243,8 @@ export function LauncherView() {
       {/* ═══ HEADER ═══ */}
       <header className="dash-header flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-b border-border/20">
         <div className="flex items-center gap-2.5">
-          <img src="/nexq-icon.png" alt="NexQ" className="h-7 w-7 rounded-lg" />
-          <h1 id="launcher-heading" className="text-sm font-bold tracking-tight text-foreground">NexQ</h1>
+          <img src="/nexq-icon.png" alt="Career Teleprompt" className="h-7 w-7 rounded-lg" />
+          <h1 id="launcher-heading" className="text-sm font-bold tracking-tight text-foreground">Career Teleprompt</h1>
         </div>
 
         {/* Active meeting in header */}
@@ -510,9 +510,9 @@ export function LauncherView() {
       <footer className="dash-footer flex items-center justify-between border-t border-border/20">
         <ServiceStatusBar />
         <div className="flex items-center gap-2 pr-5 text-xs text-muted-foreground/60">
-          <span>&copy; {new Date().getFullYear()} {NEXQ_DEVELOPER}</span>
+          <span>Built on NexQ by {NEXQ_DEVELOPER}</span>
           <span className="text-muted-foreground/40">|</span>
-          <span className="font-medium">NexQ v{NEXQ_VERSION}</span>
+          <span className="font-medium">Career Teleprompt v{NEXQ_VERSION}</span>
         </div>
       </footer>
 
