@@ -1,6 +1,7 @@
 export interface TeleprompterPresentationPreferences {
   fontSize: number;
   lineHeight: number;
+  readingZonePercent: number;
 }
 
 export interface PreferenceReader {
@@ -17,12 +18,15 @@ export const TELEPROMPTER_PREFERENCES_KEY =
 export const DEFAULT_TELEPROMPTER_PREFERENCES: TeleprompterPresentationPreferences = {
   fontSize: 32,
   lineHeight: 1.5,
+  readingZonePercent: 42,
 };
 
 const MIN_FONT_SIZE = 20;
 const MAX_FONT_SIZE = 56;
 const MIN_LINE_HEIGHT = 1.1;
 const MAX_LINE_HEIGHT = 2.2;
+const MIN_READING_ZONE_PERCENT = 30;
+const MAX_READING_ZONE_PERCENT = 60;
 
 export function normalizeTeleprompterPreferences(
   candidate: Partial<TeleprompterPresentationPreferences> | null | undefined,
@@ -39,6 +43,12 @@ export function normalizeTeleprompterPreferences(
       MIN_LINE_HEIGHT,
       MAX_LINE_HEIGHT,
       DEFAULT_TELEPROMPTER_PREFERENCES.lineHeight,
+    ),
+    readingZonePercent: clampFinite(
+      candidate?.readingZonePercent,
+      MIN_READING_ZONE_PERCENT,
+      MAX_READING_ZONE_PERCENT,
+      DEFAULT_TELEPROMPTER_PREFERENCES.readingZonePercent,
     ),
   };
 }
