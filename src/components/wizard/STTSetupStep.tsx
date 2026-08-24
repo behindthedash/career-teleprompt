@@ -181,25 +181,35 @@ export function STTSetupStep({ onReadinessChange }: STTSetupStepProps) {
   }, [keyStatus, localEngines, selectedInterviewerModel, themSTT]);
 
   // Persist selections and migrate the old fresh-install Whisper.cpp default to
-  // a real streaming interviewer engine.
+  // a real streaming interviewer engine. Equality checks prevent a store-update
+  // loop when this effect observes the config object it just persisted.
   useEffect(() => {
     if (!meetingAudioConfig) {
       onReadinessChange?.(false);
       return;
     }
 
-    const updated: MeetingAudioConfig = {
-      ...meetingAudioConfig,
-      you: { ...meetingAudioConfig.you, stt_provider: youSTT },
-      them: {
-        ...meetingAudioConfig.them,
-        stt_provider: themSTT,
-        local_model_id:
-          themSTT === "sherpa_onnx" ? selectedInterviewerModel : undefined,
-      },
-      preset_name: null,
-    };
-    setMeetingAudioConfig(updated);
+    const nextLocalModelId =
+      themSTT === "sherpa_onnx" ? selectedInterviewerModel : undefined;
+    const alreadyPersisted =
+      meetingAudioConfig.you.stt_provider === youSTT &&
+      meetingAudioConfig.them.stt_provider === themSTT &&
+      meetingAudioConfig.them.local_model_id === nextLocalModelId;
+
+    if (!alreadyPersisted) {
+      const updated: MeetingAudioConfig = {
+        ...meetingAudioConfig,
+        you: { ...meetingAudioConfig.you, stt_provider: youSTT },
+        them: {
+          ...meetingAudioConfig.them,
+          stt_provider: themSTT,
+          local_model_id: nextLocalModelId,
+        },
+        preset_name: null,
+      };
+      setMeetingAudioConfig(updated);
+    }
+
     onReadinessChange?.(interviewerReady);
   }, [
     interviewerReady,
