@@ -11,7 +11,8 @@ import { useConfigStore } from "../stores/configStore";
 import { useMeetingStore } from "../stores/meetingStore";
 import { useDevLogStore } from "../stores/devLogStore";
 import { useTranscriptStore } from "../stores/transcriptStore";
-import { stopCapture, startCapturePerParty } from "../lib/ipc";
+import { showToast } from "../stores/toastStore";
+import { hasApiKey, stopCapture, startCapturePerParty } from "../lib/ipc";
 
 export function useAudioConfigSync() {
   const isRecording = useMeetingStore((s) => s.isRecording);
@@ -25,11 +26,85 @@ export function useAudioConfigSync() {
   const restartingRef = useRef(false);
   // Debounce timer to batch rapid config changes
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Prevent repeated repair attempts/toasts for a persisted legacy configuration.
+  const outputRepairAttemptedRef = useRef(false);
 
   useEffect(() => {
     if (!isRecording || !meetingAudioConfig) return;
 
     const configKey = JSON.stringify(meetingAudioConfig);
+    const invalidWindowsOutput =
+      meetingAudioConfig.them.stt_provider === "windows_native" &&
+      !meetingAudioConfig.them.is_input_device;
+
+    // Windows.Media.SpeechRecognition can only transcribe an input device. The
+    // old "Zero Setup" preset incorrectly paired it with WASAPI loopback, which
+    // produced audio/VAD activity but no words. Repair persisted copies of that
+    // configuration as soon as the meeting starts. Whisper API accepts loopback
+    // PCM and CredentialManager reuses the user's existing OpenAI key.
+    if (invalidWindowsOutput && !outputRepairAttemptedRef.current) {
+      outputRepairAttemptedRef.current = true;
+
+      // Rust already started with the persisted config before isRecording became
+      // true. Record that as the applied state so the repaired config below is
+      // recognized as a real change and goes through the normal hot-swap path.
+      if (appliedConfigRef.current === null) {
+        appliedConfigRef.current = configKey;
+        pendingConfigRef.current = configKey;
+      }
+
+      const log = useDevLogStore.getState().addEntry;
+      void hasApiKey("whisper_api")
+        .then((openAiAvailable) => {
+          const freshConfig = useConfigStore.getState().meetingAudioConfig;
+          if (
+            !freshConfig ||
+            freshConfig.them.stt_provider !== "windows_native" ||
+            freshConfig.them.is_input_device
+          ) {
+            return;
+          }
+
+          if (!openAiAvailable) {
+            const message =
+              "Windows Speech cannot transcribe system audio. Configure OpenAI/Whisper, Deepgram, or a local STT model for Them.";
+            log("error", "stt", message);
+            showToast(message, "error");
+            return;
+          }
+
+          const isLegacyZeroSetup = freshConfig.preset_name === "Zero Setup";
+          const repairedConfig = {
+            ...freshConfig,
+            you: isLegacyZeroSetup
+              ? { ...freshConfig.you, stt_provider: "windows_native" as const }
+              : freshConfig.you,
+            them: {
+              ...freshConfig.them,
+              stt_provider: "whisper_api" as const,
+              local_model_id: undefined,
+            },
+            preset_name: isLegacyZeroSetup ? "OpenAI + Windows" : null,
+          };
+
+          log(
+            "warn",
+            "stt",
+            "Windows Speech is input-only; switching system audio transcription to OpenAI Whisper"
+          );
+          showToast(
+            "System transcription switched to OpenAI Whisper",
+            "info"
+          );
+          useConfigStore.getState().setMeetingAudioConfig(repairedConfig);
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          log("error", "stt", `Could not repair system STT config: ${message}`);
+        });
+
+      return;
+    }
 
     // On first run (meeting just started), record the applied config
     if (appliedConfigRef.current === null) {
@@ -132,6 +207,7 @@ export function useAudioConfigSync() {
       appliedConfigRef.current = null;
       pendingConfigRef.current = null;
       restartingRef.current = false;
+      outputRepairAttemptedRef.current = false;
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
         debounceRef.current = null;
