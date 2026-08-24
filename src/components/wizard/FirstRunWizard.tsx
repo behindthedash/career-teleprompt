@@ -121,17 +121,17 @@ export function FirstRunWizard({ initialStep = 0 }: FirstRunWizardProps = {}) {
     currentStep === 0 ? detectionComplete : currentStep < STEP_COUNT - 1;
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <main className="flex h-full flex-col bg-background" aria-labelledby="setup-wizard-heading">
       {/* Header with progress */}
       <header className="flex items-center justify-between border-b border-border/20 px-8 py-4">
-        <div className="flex items-center gap-2.5">
+        <h1 id="setup-wizard-heading" className="flex items-baseline gap-2.5">
           <span className="text-base font-bold tracking-tight text-foreground">
             NexQ
           </span>
           <span className="text-sm text-muted-foreground/60 font-medium">
             Setup
           </span>
-        </div>
+        </h1>
 
         {/* Step indicator dots */}
         <div className="flex items-center gap-2">
@@ -145,7 +145,7 @@ export function FirstRunWizard({ initialStep = 0 }: FirstRunWizardProps = {}) {
                 }
               }}
               className="group flex items-center gap-1"
-              aria-label={`Step ${i + 1}`}
+              aria-label={`Step ${i + 1}: ${STEP_LABELS[i]}`}
               aria-current={currentStep === i ? "step" : undefined}
             >
               <div
@@ -242,6 +242,6 @@ export function FirstRunWizard({ initialStep = 0 }: FirstRunWizardProps = {}) {
           )}
         </div>
       </footer>
-    </div>
+    </main>
   );
 }
