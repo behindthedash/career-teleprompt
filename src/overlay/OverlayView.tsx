@@ -164,8 +164,9 @@ export function OverlayView() {
           : "Split view";
 
   return (
-    <div
+    <main
       className="overlay-bg flex h-full flex-col rounded-xl border border-border/20 shadow-xl"
+      aria-labelledby="overlay-heading"
       style={{
         background: `hsl(var(--background) / ${overlayOpacity})`,
         backdropFilter: overlayOpacity > 0.7 ? "blur(12px) saturate(1.1)" : "none",
@@ -177,13 +178,14 @@ export function OverlayView() {
         style={{ borderBottom: "1px solid hsl(var(--border) / 0.12)" }}
       >
         <div className="flex items-center gap-2.5" data-tauri-drag-region>
-          <GripHorizontal className="h-3 w-3 text-muted-foreground/40" />
-          <span
+          <GripHorizontal className="h-3 w-3 text-muted-foreground/40" aria-hidden="true" />
+          <h1
+            id="overlay-heading"
             className="max-w-[160px] truncate text-xs font-semibold text-foreground/90"
             title={meetingTitle}
           >
             {meetingTitle}
-          </span>
+          </h1>
           {recordingEnabled && (
             <div
               className="flex items-center gap-1.5 rounded-full bg-destructive/20 px-2.5 py-0.5 ring-1 ring-destructive/10"
@@ -415,7 +417,7 @@ export function OverlayView() {
       <div className="border-t border-border/20">
         <ServiceStatusBar compact />
       </div>
-    </div>
+    </main>
   );
 }
 
