@@ -27,14 +27,25 @@ const settingsTabs = [
   ["about", "About"],
 ];
 
+const overlayViewport = { width: 1280, height: 560 };
+
 const screens = [
-  { id: "launcher", title: "Launcher", url: "/visual-review.html?screen=launcher", viewport: { width: 1180, height: 760 } },
-  { id: "overlay", title: "Meeting overlay", url: "/visual-review.html?screen=overlay", viewport: { width: 1200, height: 440 } },
-  { id: "settings-modal", title: "Settings modal", url: "/visual-review.html?screen=settings-modal", viewport: { width: 900, height: 640 } },
-  { id: "devlog", title: "Developer log", url: "/visual-review.html?screen=devlog", viewport: { width: 1100, height: 720 } },
+  { id: "launcher", title: "Launcher", group: "Launcher", url: "/visual-review.html?screen=launcher", viewport: { width: 1180, height: 760 } },
+  { id: "overlay-split-default", title: "Overlay — split default", group: "Overlay Core", url: "/visual-review.html?screen=overlay&state=split-default", viewport: overlayViewport },
+  { id: "overlay-ai-focus", title: "Overlay — AI focus", group: "Overlay Core", url: "/visual-review.html?screen=overlay&state=ai-focus", viewport: overlayViewport },
+  { id: "overlay-teleprompter-editing", title: "Teleprompter — editing", group: "Teleprompter States", url: "/visual-review.html?screen=overlay&state=teleprompter-editing", viewport: overlayViewport, productState: "teleprompter-editing" },
+  { id: "overlay-teleprompter-following", title: "Teleprompter — following", group: "Teleprompter States", url: "/visual-review.html?screen=overlay&state=teleprompter-following", viewport: overlayViewport, productState: "teleprompter-following" },
+  { id: "overlay-teleprompter-holding", title: "Teleprompter — holding", group: "Teleprompter States", url: "/visual-review.html?screen=overlay&state=teleprompter-holding", viewport: overlayViewport, productState: "teleprompter-holding" },
+  { id: "overlay-teleprompter-lost", title: "Teleprompter — lost", group: "Teleprompter States", url: "/visual-review.html?screen=overlay&state=teleprompter-lost", viewport: overlayViewport, productState: "teleprompter-lost" },
+  { id: "overlay-teleprompter-pending-answer", title: "Teleprompter — pending AI answer", group: "Teleprompter States", url: "/visual-review.html?screen=overlay&state=teleprompter-pending-answer", viewport: overlayViewport, productState: "teleprompter-pending-answer" },
+  { id: "overlay-teleprompter-generated-active", title: "Teleprompter — generated answer active", group: "Teleprompter States", url: "/visual-review.html?screen=overlay&state=teleprompter-generated-active", viewport: overlayViewport, productState: "teleprompter-generated-active" },
+  { id: "overlay-ai-to-teleprompter-handoff", title: "AI response — teleprompter handoff", group: "AI / Handoff States", url: "/visual-review.html?screen=overlay&state=ai-to-teleprompter-handoff", viewport: overlayViewport, productState: "ai-to-teleprompter-handoff" },
+  { id: "settings-modal", title: "Settings modal", group: "Settings", url: "/visual-review.html?screen=settings-modal", viewport: { width: 900, height: 640 } },
+  { id: "devlog", title: "Developer log", group: "Overlay Core", url: "/visual-review.html?screen=devlog", viewport: { width: 1100, height: 720 } },
   ...settingsTabs.map(([id, label]) => ({
     id: `settings-${id}`,
     title: `Settings — ${label}`,
+    group: "Settings",
     url: "/visual-review.html?screen=settings",
     viewport: { width: 1180, height: 760 },
     tab: label,
@@ -42,6 +53,7 @@ const screens = [
   ...["Welcome", "Audio", "STT", "LLM", "Ready"].map((label, step) => ({
     id: `wizard-${step + 1}-${label.toLowerCase()}`,
     title: `Setup wizard — ${label}`,
+    group: "Setup Wizard",
     url: `/visual-review.html?screen=wizard&step=${step}`,
     viewport: { width: 1100, height: 760 },
   })),
@@ -67,6 +79,94 @@ function addFinding(finding) {
     issueKey,
     fingerprint: fingerprint(`${issueKey}:${finding.screen}`),
   });
+}
+
+async function visibleTextCount(page, text) {
+  return page.getByText(text, { exact: false }).count();
+}
+
+async function visibleButtonCount(page, name) {
+  return page.getByRole("button", { name, exact: false }).count();
+}
+
+async function addProductStateFinding(screen, rule, title, details, recommendation, severity = "high") {
+  addFinding({
+    screen: screen.id,
+    screenTitle: screen.title,
+    category: "product-state",
+    severity,
+    rule,
+    issueKey: `product-state:${rule}`,
+    title,
+    details,
+    recommendation,
+  });
+}
+
+async function inspectProductState(page, screen) {
+  const state = screen.productState;
+  if (!state) return;
+
+  if (state === "teleprompter-editing") {
+    if ((await page.locator("textarea").count()) === 0) {
+      await addProductStateFinding(screen, "teleprompter-editor-missing", "Teleprompter editing state has no script editor", "The editing fixture rendered without a visible textarea.", "Keep the script editor visible and immediately usable when no prepared script is active.");
+    }
+    if ((await visibleButtonCount(page, "Use Script")) === 0) {
+      await addProductStateFinding(screen, "teleprompter-use-script-missing", "Teleprompter editing state lacks a primary Use Script action", "The prepared-script editor does not expose a visible Use Script action.", "Provide one obvious primary action to load the prepared script into speech-follow mode.");
+    }
+  }
+
+  if (state === "teleprompter-following") {
+    if ((await visibleTextCount(page, "Following")) === 0) {
+      await addProductStateFinding(screen, "teleprompter-following-status-missing", "Active speech following is not visibly communicated", "The following fixture does not show a visible Following status.", "Keep the speech-follow state visible without forcing the user to infer it from scrolling behavior.");
+    }
+    const previous = await visibleButtonCount(page, "Previous");
+    const next = await visibleButtonCount(page, "Next");
+    if (previous === 0 || next === 0) {
+      await addProductStateFinding(screen, "teleprompter-manual-navigation-missing", "Teleprompter lacks discoverable manual navigation", "The following state does not expose both Previous and Next section controls.", "Always provide an obvious manual override path when automatic speech following is active.");
+    }
+  }
+
+  if (state === "teleprompter-holding") {
+    if ((await visibleTextCount(page, "Holding")) === 0) {
+      await addProductStateFinding(screen, "teleprompter-holding-status-missing", "Uncertain speech alignment is not visibly communicated", "The holding fixture does not show a visible Holding status.", "Surface alignment uncertainty so users understand why the teleprompter has stopped advancing.");
+    }
+  }
+
+  if (state === "teleprompter-lost") {
+    if ((await visibleTextCount(page, "Lost")) === 0) {
+      await addProductStateFinding(screen, "teleprompter-lost-status-missing", "Lost speech alignment is not visibly communicated", "The lost fixture does not show a visible Lost status.", "Make a lost follower state immediately obvious during an interview.");
+    }
+    const previous = await visibleButtonCount(page, "Previous");
+    const next = await visibleButtonCount(page, "Next");
+    if (previous === 0 && next === 0) {
+      await addProductStateFinding(screen, "teleprompter-lost-recovery-missing", "Lost speech alignment has no visible recovery action", "The lost state offers no visible Previous/Next recovery navigation.", "Give the user an immediate recovery path such as Previous, Next, Resume from here, or a similar explicit action.");
+    }
+  }
+
+  if (state === "teleprompter-pending-answer") {
+    if ((await visibleTextCount(page, "New interview answer ready")) === 0) {
+      await addProductStateFinding(screen, "teleprompter-pending-answer-status-missing", "Pending AI answer is not clearly announced", "The pending-answer fixture does not visibly announce that a new answer is waiting.", "Keep generated answers staged and clearly distinguish them from the text currently being read.");
+    }
+    if ((await visibleButtonCount(page, "Use new answer")) === 0) {
+      await addProductStateFinding(screen, "teleprompter-pending-answer-accept-missing", "Pending AI answer lacks an accept action", "The staged generated answer cannot be visibly accepted from the teleprompter surface.", "Provide a clear action to replace the current script with the pending AI answer.");
+    }
+    if ((await page.getByRole("button", { name: "Dismiss new answer", exact: false }).count()) === 0) {
+      await addProductStateFinding(screen, "teleprompter-pending-answer-dismiss-missing", "Pending AI answer lacks a labeled dismiss action", "The staged generated answer has no accessible dismiss control.", "Allow the user to reject a generated answer without disturbing the current reading position.");
+    }
+  }
+
+  if (state === "teleprompter-generated-active") {
+    if ((await visibleButtonCount(page, "Save as Prepared")) === 0) {
+      await addProductStateFinding(screen, "teleprompter-save-generated-missing", "Generated teleprompter answer cannot be saved as prepared content", "The generated-answer fixture does not expose Save as Prepared.", "Keep generated answers ephemeral by default but allow an explicit promotion to prepared content.");
+    }
+  }
+
+  if (state === "ai-to-teleprompter-handoff") {
+    if ((await page.getByRole("button", { name: "Prompt this answer", exact: false }).count()) === 0) {
+      await addProductStateFinding(screen, "ai-teleprompter-handoff-missing", "Promptable AI answer lacks a teleprompter handoff", "A What to Say answer is visible but no Prompt action is exposed.", "Keep the AI-to-teleprompter handoff directly available on eligible interview responses.");
+    }
+  }
 }
 
 await fs.rm(outputDir, { recursive: true, force: true });
@@ -104,9 +204,11 @@ try {
       }
     }
 
+    await inspectProductState(page, screen);
+
     const screenshotPath = path.join(screenshotDir, `${screen.id}.png`);
     await page.screenshot({ path: screenshotPath, fullPage: true });
-    screenshots.push({ id: screen.id, title: screen.title, path: path.relative(outputDir, screenshotPath), viewport: screen.viewport });
+    screenshots.push({ id: screen.id, title: screen.title, group: screen.group, path: path.relative(outputDir, screenshotPath), viewport: screen.viewport });
 
     const renderFailure = await page.getByText("Visual review screen failed to render", { exact: false }).count();
     if (renderFailure > 0) {
@@ -306,6 +408,18 @@ const report = {
 
 await fs.writeFile(path.join(outputDir, "report.json"), JSON.stringify(report, null, 2));
 
+const screenshotGroups = ["Launcher", "Setup Wizard", "Settings", "Overlay Core", "Teleprompter States", "AI / Handoff States"];
+const groupedScreenshotMarkdown = screenshotGroups.flatMap((group) => {
+  const groupScreens = screenshots.filter((shot) => shot.group === group);
+  if (groupScreens.length === 0) return [];
+  return [
+    `### ${group}`,
+    "",
+    ...groupScreens.map((shot) => `- ${shot.title}: \`${shot.path}\``),
+    "",
+  ];
+});
+
 const markdown = [
   "# Visual UX review",
   "",
@@ -314,12 +428,11 @@ const markdown = [
   "",
   "## Screenshots",
   "",
-  ...screenshots.map((shot) => `- ${shot.title}: \`${shot.path}\``),
-  "",
+  ...groupedScreenshotMarkdown,
   "## Findings",
   "",
   ...(findings.length === 0
-    ? ["No automated accessibility, layout, or discoverability concerns were detected."]
+    ? ["No automated accessibility, layout, product-state, or discoverability concerns were detected."]
     : findings.map((finding) => `- **[${finding.severity.toUpperCase()}] ${finding.screenTitle} — ${finding.title}** — ${finding.details}`)),
   "",
 ].join("\n");
