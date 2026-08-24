@@ -1,3 +1,4 @@
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use tauri::{command, AppHandle, Emitter, State};
@@ -7,6 +8,32 @@ use crate::intelligence::IntelligenceEngine;
 use crate::llm::provider::{GenerationParams, RagChunkInfo, RagDiagnostics};
 use crate::rag;
 use crate::state::AppState;
+
+/// Owns the backend generation lease for the entire command lifetime.
+///
+/// `generate_assist` has many fallible preflight paths (RAG, provider lookup,
+/// model selection, poisoned locks) before the actual LLM call. A manual reset
+/// at the bottom of the function misses every `?`/early return above it and can
+/// permanently strand `is_generating=true`. Drop-based cleanup makes every
+/// normal error return and unwind release the lease.
+struct GenerationFlagGuard {
+    engine: Arc<Mutex<IntelligenceEngine>>,
+}
+
+impl GenerationFlagGuard {
+    fn new(engine: Arc<Mutex<IntelligenceEngine>>) -> Self {
+        Self { engine }
+    }
+}
+
+impl Drop for GenerationFlagGuard {
+    fn drop(&mut self) {
+        match self.engine.lock() {
+            Ok(engine) => engine.set_generating(false),
+            Err(e) => log::error!("Failed to release generation flag: {}", e),
+        }
+    }
+}
 
 /// Compose instruction presets + custom text into a single string.
 /// Mirrors the frontend's `composeInstructions()` in aiActionsStore.ts.
@@ -111,12 +138,14 @@ pub async fn generate_assist(
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    let generation_engine = state
+        .intelligence
+        .as_ref()
+        .ok_or_else(|| "Intelligence engine not initialized".to_string())?
+        .clone();
+
     let (last_question, cancel_flag, action_config_snapshot, composed_instructions) = {
-        let intel = state
-            .intelligence
-            .as_ref()
-            .ok_or_else(|| "Intelligence engine not initialized".to_string())?;
-        let engine = intel
+        let engine = generation_engine
             .lock()
             .map_err(|e| format!("Failed to lock intelligence engine: {}", e))?;
 
@@ -139,6 +168,9 @@ pub async fn generate_assist(
 
         (question, cancel, (action_cfg, global_defaults), composed)
     };
+
+    // From this point forward every return path releases is_generating.
+    let _generation_guard = GenerationFlagGuard::new(generation_engine);
 
     let (action_cfg, global_defaults) = action_config_snapshot;
     let include_question = action_cfg.as_ref().map(|c| c.include_detected_question).unwrap_or(true);
@@ -443,7 +475,7 @@ pub async fn generate_assist(
     };
 
     let mode_clone = mode.clone();
-    let result = IntelligenceEngine::generate_assist(
+    IntelligenceEngine::generate_assist(
         &system_prompt,
         &mode_clone,
         custom_question.as_deref(),
@@ -471,18 +503,7 @@ pub async fn generate_assist(
         app_handle,
         cancel_flag,
     )
-    .await;
-
-    {
-        let intel = state.intelligence.as_ref();
-        if let Some(intel) = intel {
-            if let Ok(engine) = intel.lock() {
-                engine.set_generating(false);
-            }
-        }
-    }
-
-    result
+    .await
 }
 
 #[command]
@@ -657,4 +678,23 @@ pub async fn get_action_configs(
     let configs = engine.get_action_configs();
     serde_json::to_string(configs)
         .map_err(|e| format!("Failed to serialize action configs: {}", e))
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::{GenerationFlagGuard, IntelligenceEngine};
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn generation_guard_releases_flag_on_scope_exit() {
+        let engine = Arc::new(Mutex::new(IntelligenceEngine::new()));
+        engine.lock().unwrap().set_generating(true);
+
+        {
+            let _guard = GenerationFlagGuard::new(engine.clone());
+            assert!(engine.lock().unwrap().is_generating());
+        }
+
+        assert!(!engine.lock().unwrap().is_generating());
+    }
 }
