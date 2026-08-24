@@ -25,11 +25,14 @@ export type DeviceHint =
 
 export const BUILT_IN_PRESETS: MeetingPreset[] = [
   {
-    name: "Zero Setup",
-    description: "Web Speech + Windows built-in — works instantly",
-    badge: "Default",
-    you: { hint: "default_mic", stt: "web_speech" },
-    them: { hint: "default_output", stt: "windows_native" },
+    name: "OpenAI + Windows",
+    description: "Windows Speech for you + OpenAI Whisper for system audio",
+    badge: "Recommended",
+    // Windows Speech is input-only. System/output audio must use a provider
+    // that accepts PCM loopback audio; Whisper API reuses the OpenAI key.
+    you: { hint: "default_mic", stt: "windows_native" },
+    them: { hint: "default_output", stt: "whisper_api" },
+    requiresKey: "openai",
   },
   {
     name: "Best Quality",
