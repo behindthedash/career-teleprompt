@@ -42,6 +42,10 @@ jobs:
         run: cargo test question_detector --lib
         working-directory: src-tauri
 
+      - name: Prepared Q&A retrieval tests
+        run: cargo test prompt_builder --lib
+        working-directory: src-tauri
+
       - name: Rust check
         run: cargo check
         working-directory: src-tauri
