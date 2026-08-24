@@ -11,6 +11,10 @@ import {
   dismissPendingDocument as dismissPendingLifecycle,
   stagePendingGeneratedDocument,
 } from "../teleprompter/lifecycle";
+import {
+  loadTeleprompterPreferences,
+  saveTeleprompterPreferences,
+} from "../teleprompter/preferences";
 
 type TeleprompterFollowerStatus = "idle" | FollowerStatus;
 
@@ -56,6 +60,7 @@ interface TeleprompterState {
 const MIN_FONT_SIZE = 20;
 const MAX_FONT_SIZE = 56;
 const FONT_STEP = 2;
+const initialPresentationPreferences = loadTeleprompterPreferences();
 
 const followerReset = {
   cursorTokenIndex: 0,
@@ -69,8 +74,8 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
   pendingDocument: null,
   draftText: "",
   activeSectionIndex: 0,
-  fontSize: 32,
-  lineHeight: 1.5,
+  fontSize: initialPresentationPreferences.fontSize,
+  lineHeight: initialPresentationPreferences.lineHeight,
   isEditing: true,
 
   followingEnabled: true,
@@ -156,9 +161,30 @@ export const useTeleprompterStore = create<TeleprompterState>((set, get) => ({
   previousSection: () => get().setActiveSection(get().activeSectionIndex - 1),
   nextSection: () => get().setActiveSection(get().activeSectionIndex + 1),
 
-  increaseFontSize: () => set({ fontSize: Math.min(MAX_FONT_SIZE, get().fontSize + FONT_STEP) }),
-  decreaseFontSize: () => set({ fontSize: Math.max(MIN_FONT_SIZE, get().fontSize - FONT_STEP) }),
-  setLineHeight: (lineHeight) => set({ lineHeight: Math.max(1.1, Math.min(lineHeight, 2.2)) }),
+  increaseFontSize: () => {
+    const state = get();
+    const preferences = saveTeleprompterPreferences({
+      fontSize: Math.min(MAX_FONT_SIZE, state.fontSize + FONT_STEP),
+      lineHeight: state.lineHeight,
+    });
+    set({ fontSize: preferences.fontSize });
+  },
+  decreaseFontSize: () => {
+    const state = get();
+    const preferences = saveTeleprompterPreferences({
+      fontSize: Math.max(MIN_FONT_SIZE, state.fontSize - FONT_STEP),
+      lineHeight: state.lineHeight,
+    });
+    set({ fontSize: preferences.fontSize });
+  },
+  setLineHeight: (lineHeight) => {
+    const state = get();
+    const preferences = saveTeleprompterPreferences({
+      fontSize: state.fontSize,
+      lineHeight,
+    });
+    set({ lineHeight: preferences.lineHeight });
+  },
 
   setFollowingEnabled: (followingEnabled) =>
     set({

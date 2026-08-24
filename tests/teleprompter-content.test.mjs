@@ -6,6 +6,10 @@ import {
   normalizeMatchText,
   promoteGeneratedDocumentToPrepared,
 } from "../.tmp-teleprompter-tests/content.js";
+import {
+  inferTeleprompterFormatFromPath,
+  preparedFileSourceUri,
+} from "../.tmp-teleprompter-tests/fileImport.js";
 
 assert.equal(normalizeMatchText("  HéLLo—WORLD!  42  "), "héllo world 42");
 assert.equal(normalizeMatchText("Ｆｕｌｌｗｉｄｔｈ １２３"), "fullwidth 123");
@@ -13,6 +17,15 @@ assert.equal(
   cleanDisplayText(" first  \r\n\r\n\r\n\r\nsecond\t \n"),
   "first\n\nsecond",
 );
+
+assert.equal(inferTeleprompterFormatFromPath("C:\\prep\\answer.txt"), "text");
+assert.equal(inferTeleprompterFormatFromPath("C:\\prep\\answer.MD"), "markdown");
+assert.equal(inferTeleprompterFormatFromPath("/prep/answer.markdown"), "markdown");
+assert.equal(
+  preparedFileSourceUri("C:\\Interview Prep\\why role.md"),
+  "prepared-file://C%3A%5CInterview%20Prep%5Cwhy%20role.md",
+);
+assert.throws(() => preparedFileSourceUri("   "), /file path is required/);
 
 const plain = loadPreparedDocument("My prepared answer.", "file:///answer.txt");
 assert.equal(plain.origin, "prepared");
