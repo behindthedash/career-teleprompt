@@ -338,7 +338,9 @@ export function TeleprompterPanel() {
 
         <div
           ref={scrollRef}
-          className="h-full overflow-y-auto overscroll-contain px-[8%] scroll-smooth"
+          tabIndex={0}
+          aria-label="Teleprompter reading content"
+          className="h-full overflow-y-auto overscroll-contain px-[8%] scroll-smooth focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40"
         >
           <div className="h-[42%] min-h-16" aria-hidden="true" />
           <div className="mx-auto max-w-4xl space-y-16">
