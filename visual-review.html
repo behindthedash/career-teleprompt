@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Career Teleprompt Visual Review</title>
+    <script>
+      // Minimal Tauri bridge used only by the browser-based visual review harness.
+      // The production app never loads this HTML entry point.
+      (() => {
+        let callbackId = 1;
+        const emptyArrayCommands = /(list|devices|models|meetings|history|providers|bookmarks|items|speakers|catalog|engines|scenarios)/i;
+        const falseCommands = /(^|_)(is|has|check|running|available|enabled)(_|$)/i;
+
+        window.__TAURI_INTERNALS__ = {
+          metadata: {
+            currentWindow: { label: "launcher" },
+            currentWebview: { label: "launcher" },
+          },
+          invoke: async (command) => {
+            if (emptyArrayCommands.test(command)) return [];
+            if (falseCommands.test(command)) return false;
+            if (/version/i.test(command)) return "visual-review";
+            if (/get_api_key/i.test(command)) return null;
+            if (/get_/i.test(command)) return null;
+            return null;
+          },
+          transformCallback: () => callbackId++,
+          unregisterCallback: () => {},
+          convertFileSrc: (path) => path,
+        };
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/visual-review/main.tsx"></script>
+  </body>
+</html>
