@@ -66,23 +66,23 @@ const OPINION_OPTIONS = [
 const HELP: Record<string, { title: string; body: string }> = {
   tone: {
     title: "Tone",
-    body: "Sets the conversational voice of AI responses.\n\nProfessional \u2014 client-facing meetings & formal settings\nCasual \u2014 team standups & internal syncs\nFormal \u2014 board presentations & executive briefs\nFriendly \u2014 1-on-1s & coaching sessions\nDirect \u2014 rapid Q&A & time-constrained calls\n\nClick a selected chip again to deselect.",
+    body: "Sets the conversational voice of AI responses.\n\nProfessional — client-facing meetings & formal settings\nCasual — team standups & internal syncs\nFormal — board presentations & executive briefs\nFriendly — 1-on-1s & coaching sessions\nDirect — rapid Q&A & time-constrained calls\n\nClick a selected chip again to deselect.",
   },
   format: {
     title: "Format",
-    body: "Controls how AI structures its output.\n\nBullet Points \u2014 ideal for action items, meeting notes\nParagraphs \u2014 best for narrative summaries & explanations\nNumbered Lists \u2014 great for step-by-step procedures\nOne-liner \u2014 ultra-concise, glanceable suggestions",
+    body: "Controls how AI structures its output.\n\nBullet Points — ideal for action items, meeting notes\nParagraphs — best for narrative summaries & explanations\nNumbered Lists — great for step-by-step procedures\nOne-liner — ultra-concise, glanceable suggestions",
   },
   length: {
     title: "Length",
-    body: "Adjusts response verbosity.\n\nBrief (1-2 sentences) \u2014 fast-paced calls, overlay readability\nStandard (3-5 sentences) \u2014 balanced detail for most meetings\nDetailed \u2014 thorough analysis when you have time to read",
+    body: "Adjusts response verbosity.\n\nBrief (1-2 sentences) — fast-paced calls, overlay readability\nStandard (3-5 sentences) — balanced detail for most meetings\nDetailed — thorough analysis when you have time to read",
   },
   opinion: {
     title: "Perspective",
-    body: "Controls whether the AI adds its own analysis.\n\nFactual only \u2014 answers are grounded strictly in transcript/memory context, no interpretation (default)\nAdd my take \u2014 appends a short '## My Take' section with the AI's own analysis, interpretation, or recommendation after the factual answer",
+    body: "Controls whether the AI adds its own analysis.\n\nFactual only — answers are grounded strictly in transcript/memory context, no interpretation (default)\nAdd my take — appends a short '## My Take' section with the AI's own analysis, interpretation, or recommendation after the factual answer",
   },
   instructions: {
     title: "Additional Instructions",
-    body: "Free-form text injected into every AI prompt. Use this for:\n\n\u2022 Role context (e.g. \"I'm a Product Manager\")\n\u2022 Domain-specific terminology or acronyms\n\u2022 Additional formatting or style rules\n\nCombined with the preset selections above. Clear this field if it duplicates preset text.",
+    body: "Free-form text injected into every AI prompt. Use this for:\n\n• Role context (e.g. \"I'm a Product Manager\")\n• Domain-specific terminology or acronyms\n• Additional formatting or style rules\n\nCombined with the preset selections above. Clear this field if it duplicates preset text.",
   },
   autoTrigger: {
     title: "Auto-Trigger",
@@ -90,11 +90,11 @@ const HELP: Record<string, { title: string; body: string }> = {
   },
   temperature: {
     title: "Temperature",
-    body: "Controls AI creativity and randomness.\n\nLow (0.0\u20130.3) \u2014 precise, consistent, factual. Best for technical discussions, data review, and compliance topics.\nMedium (0.4\u20130.6) \u2014 balanced blend of accuracy and variety.\nHigh (0.7\u20131.0) \u2014 varied, creative. Useful for brainstorming and ideation sessions.",
+    body: "Controls AI creativity and randomness.\n\nLow (0.0–0.3) — precise, consistent, factual. Best for technical discussions, data review, and compliance topics.\nMedium (0.4–0.6) — balanced blend of accuracy and variety.\nHigh (0.7–1.0) — varied, creative. Useful for brainstorming and ideation sessions.",
   },
   transcriptWindow: {
     title: "Transcript Window",
-    body: "How many minutes of recent conversation the AI reads before responding.\n\nShort (1-5 min) \u2014 focused on the immediate topic, faster responses. Good for quick meetings.\nLong (10-30 min) \u2014 broader context for complex, multi-topic discussions that reference earlier points.",
+    body: "How many minutes of recent conversation the AI reads before responding.\n\nShort (1-5 min) — focused on the immediate topic, faster responses. Good for quick meetings.\nLong (10-30 min) — broader context for complex, multi-topic discussions that reference earlier points.",
   },
 };
 
@@ -161,6 +161,8 @@ function HelpButton({
           : "border-border/40 text-muted-foreground/60 hover:border-border/60 hover:text-muted-foreground"
       } h-[18px] w-[18px]`}
       title="Show explanation"
+      aria-label={isOpen ? "Hide explanation" : "Show explanation"}
+      aria-expanded={isOpen}
     >
       {isOpen ? <X className="h-2.5 w-2.5" /> : <HelpCircle className="h-2.5 w-2.5" />}
     </button>
@@ -510,6 +512,7 @@ export function AIActionsSettings() {
                 value={configs.customInstructions}
                 onChange={(e) => handleCustomInstructionsChange(e.target.value)}
                 placeholder="Add extra instructions beyond the presets above..."
+                aria-label="Additional instructions"
                 className="mt-2 w-full resize-none rounded-lg border border-border/50 bg-secondary/30 px-3 py-2.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
               />
             </div>
@@ -566,6 +569,8 @@ export function AIActionsSettings() {
                   onChange={(e) =>
                     handleGlobalDefaultChange("temperature", Number(e.target.value))
                   }
+                  aria-label="AI response temperature"
+                  aria-valuetext={configs.globalDefaults.temperature.toFixed(1)}
                   className="mt-2 w-full cursor-pointer accent-primary"
                 />
                 <div className="mt-1 flex justify-between text-meta text-muted-foreground/70">
@@ -609,6 +614,8 @@ export function AIActionsSettings() {
                       minToSecs(Number(e.target.value))
                     )
                   }
+                  aria-label="Transcript window"
+                  aria-valuetext={`${globalWindowMin} minutes`}
                   className="mt-2 w-full cursor-pointer accent-primary"
                 />
                 <div className="mt-1 flex justify-between text-meta text-muted-foreground/70">
@@ -713,6 +720,7 @@ export function AIActionsSettings() {
                 value={newActionName}
                 onChange={(e) => setNewActionName(e.target.value)}
                 placeholder="Action name"
+                aria-label="Custom action name"
                 className="w-full rounded-lg border border-border/50 bg-secondary/30 px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
               />
               <textarea
@@ -720,6 +728,7 @@ export function AIActionsSettings() {
                 value={newActionPrompt}
                 onChange={(e) => setNewActionPrompt(e.target.value)}
                 placeholder="System prompt for this action..."
+                aria-label="Custom action system prompt"
                 className="w-full resize-none rounded-lg border border-border/50 bg-secondary/30 px-3 py-2.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
               />
               <div className="flex gap-2">
@@ -807,33 +816,41 @@ function ActionCard({
         ? 0
         : secsToMin(action.transcriptWindowSeconds)
       : null;
+  const detailsId = `ai-action-${action.mode.replace(/[^a-zA-Z0-9_-]/g, "-")}-details`;
 
   return (
     <div>
       {/* Compact header row */}
-      <button
-        onClick={onToggleExpand}
-        className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors duration-150 hover:bg-secondary/20"
-      >
-        {isExpanded ? (
-          <ChevronDown className="h-3 w-3 text-muted-foreground/70 shrink-0" />
-        ) : (
-          <ChevronRight className="h-3 w-3 text-muted-foreground/70 shrink-0" />
-        )}
-        <span className="text-xs font-medium text-foreground shrink-0">
-          {action.name}
-        </span>
-        <span className="text-meta text-muted-foreground/60 shrink-0">
-          {action.mode}
-        </span>
-        {description && (
-          <span className="hidden sm:inline text-meta text-muted-foreground/60 truncate">
-            &mdash; {description}
+      <div className="flex w-full items-center px-3.5 py-2.5 transition-colors duration-150 hover:bg-secondary/20">
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          aria-expanded={isExpanded}
+          aria-controls={detailsId}
+          aria-label={`${isExpanded ? "Collapse" : "Expand"} ${action.name} settings`}
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+        >
+          {isExpanded ? (
+            <ChevronDown className="h-3 w-3 text-muted-foreground/70 shrink-0" />
+          ) : (
+            <ChevronRight className="h-3 w-3 text-muted-foreground/70 shrink-0" />
+          )}
+          <span className="text-xs font-medium text-foreground shrink-0">
+            {action.name}
           </span>
-        )}
-        <div className="ml-auto flex items-center gap-2 shrink-0">
+          <span className="text-meta text-muted-foreground/60 shrink-0">
+            {action.mode}
+          </span>
+          {description && (
+            <span className="hidden sm:inline text-meta text-muted-foreground/60 truncate">
+              &mdash; {description}
+            </span>
+          )}
+        </button>
+        <div className="ml-auto flex items-center gap-2 shrink-0 pl-2">
           {onDelete && (
             <button
+              type="button"
               onClick={handleDeleteClick}
               className="rounded-md p-1 text-muted-foreground/60 transition-colors duration-150 hover:bg-destructive/10 hover:text-destructive"
               aria-label={`Delete ${action.name}`}
@@ -847,11 +864,11 @@ function ActionCard({
             label={`Toggle ${action.name} visibility`}
           />
         </div>
-      </button>
+      </div>
 
       {/* Expanded configuration */}
       {isExpanded && (
-        <div className="border-t border-border/20 bg-secondary/10 px-3.5 py-3.5 space-y-3.5">
+        <div id={detailsId} className="border-t border-border/20 bg-secondary/10 px-3.5 py-3.5 space-y-3.5">
           {/* Purpose */}
           {description && (
             <p className="text-xs text-muted-foreground/80 italic">
@@ -880,6 +897,7 @@ function ActionCard({
               rows={3}
               value={action.systemPrompt}
               onChange={(e) => onPromptChange(e.target.value)}
+              aria-label={`${action.name} system prompt`}
               className="w-full resize-none rounded-lg border border-border/50 bg-secondary/30 px-3 py-2.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
             />
           </div>
@@ -914,6 +932,7 @@ function ActionCard({
           <div>
             <button
               onClick={onToggleOverride}
+              aria-expanded={isOverrideExpanded}
               className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"
             >
               {isOverrideExpanded ? (
@@ -965,6 +984,8 @@ function ActionCard({
                             min === 0 ? 0 : minToSecs(min)
                           );
                         }}
+                        aria-label={`${action.name} transcript window override`}
+                        aria-valuetext={formatWindowDisplay(action.transcriptWindowSeconds)}
                         className="flex-1 cursor-pointer accent-primary"
                       />
                     )}
@@ -1000,6 +1021,7 @@ function ActionCard({
                         onChange={(e) =>
                           onOverrideChange("ragTopK", Number(e.target.value))
                         }
+                        aria-label={`${action.name} RAG top-K override`}
                         className="rounded border border-border/50 bg-secondary/30 px-2 py-1 text-meta text-foreground focus:border-primary/50 focus:outline-none"
                       >
                         {[3, 5, 7, 10, 15, 20].map((v) => (
@@ -1046,6 +1068,8 @@ function ActionCard({
                         onChange={(e) =>
                           onOverrideChange("temperature", Number(e.target.value))
                         }
+                        aria-label={`${action.name} temperature override`}
+                        aria-valuetext={action.temperature.toFixed(1)}
                         className="flex-1 cursor-pointer accent-primary"
                       />
                     )}
