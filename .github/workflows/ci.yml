@@ -50,6 +50,10 @@ jobs:
         run: cargo test interview_rerank --lib
         working-directory: src-tauri
 
+      - name: OpenAI compatibility tests
+        run: cargo test openai_compat --lib
+        working-directory: src-tauri
+
       - name: Rust check
         run: cargo check
         working-directory: src-tauri
