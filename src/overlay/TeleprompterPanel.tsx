@@ -37,6 +37,7 @@ export function TeleprompterPanel() {
   const cursorTokenIndex = useTeleprompterStore((state) => state.cursorTokenIndex);
   const fontSize = useTeleprompterStore((state) => state.fontSize);
   const lineHeight = useTeleprompterStore((state) => state.lineHeight);
+  const readingZonePercent = useTeleprompterStore((state) => state.readingZonePercent);
   const isEditing = useTeleprompterStore((state) => state.isEditing);
   const followerStatus = useTeleprompterStore((state) => state.followerStatus);
   const followerConfidence = useTeleprompterStore((state) => state.followerConfidence);
@@ -53,6 +54,7 @@ export function TeleprompterPanel() {
   const increaseFontSize = useTeleprompterStore((state) => state.increaseFontSize);
   const decreaseFontSize = useTeleprompterStore((state) => state.decreaseFontSize);
   const setLineHeight = useTeleprompterStore((state) => state.setLineHeight);
+  const setReadingZonePercent = useTeleprompterStore((state) => state.setReadingZonePercent);
   const setFollowingEnabled = useTeleprompterStore((state) => state.setFollowingEnabled);
   const setActiveSection = useTeleprompterStore((state) => state.setActiveSection);
   const seekToken = useTeleprompterStore((state) => state.seekToken);
@@ -86,11 +88,11 @@ export function TeleprompterPanel() {
       const desiredTop =
         container.scrollTop +
         (targetRect.top - containerRect.top) -
-        container.clientHeight * 0.42;
+        container.clientHeight * (readingZonePercent / 100);
       container.scrollTo({ top: Math.max(0, desiredTop), behavior: "smooth" });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [activeSectionIndex, cursorTokenIndex, isEditing]);
+  }, [activeSectionIndex, cursorTokenIndex, isEditing, readingZonePercent]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -310,6 +312,20 @@ export function TeleprompterPanel() {
             <option value={1.75}>Open</option>
             <option value={2}>Wide</option>
           </select>
+          <input
+            type="range"
+            min={30}
+            max={60}
+            step={1}
+            value={readingZonePercent}
+            onChange={(event) => setReadingZonePercent(Number(event.target.value))}
+            className="ml-1 w-16 accent-primary"
+            aria-label="Teleprompter reading position"
+            title={`Reading position ${readingZonePercent}% from top`}
+          />
+          <span className="w-7 text-center text-[9px] tabular-nums text-muted-foreground">
+            {readingZonePercent}%
+          </span>
           <ReaderButton onClick={beginEditing} title="Edit script">
             <Pencil className="h-3.5 w-3.5" />
           </ReaderButton>
@@ -348,7 +364,11 @@ export function TeleprompterPanel() {
       )}
 
       <div className="relative min-h-0 flex-1 overflow-hidden">
-        <div className="pointer-events-none absolute left-0 right-0 top-[42%] z-10 flex items-center gap-2 px-3" aria-hidden="true">
+        <div
+          className="pointer-events-none absolute left-0 right-0 z-10 flex items-center gap-2 px-3"
+          style={{ top: `${readingZonePercent}%` }}
+          aria-hidden="true"
+        >
           <div className="h-px flex-1 bg-primary/20" />
           <span className="text-[8px] font-semibold uppercase tracking-[0.18em] text-primary/35">read</span>
           <div className="h-px flex-1 bg-primary/20" />
@@ -364,7 +384,11 @@ export function TeleprompterPanel() {
           title="Click a phrase to move the reading position; Page Up and Page Down navigate sections"
           className="h-full overflow-y-auto overscroll-contain px-[8%] scroll-smooth focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40"
         >
-          <div className="h-[42%] min-h-16" aria-hidden="true" />
+          <div
+            className="min-h-16"
+            style={{ height: `${readingZonePercent}%` }}
+            aria-hidden="true"
+          />
           <div className="mx-auto max-w-4xl space-y-16">
             {displaySections.map((displaySection, sectionIndex) => {
               const active = sectionIndex === activeSectionIndex;
@@ -412,7 +436,11 @@ export function TeleprompterPanel() {
               );
             })}
           </div>
-          <div className="h-[58%] min-h-24" aria-hidden="true" />
+          <div
+            className="min-h-24"
+            style={{ height: `${100 - readingZonePercent}%` }}
+            aria-hidden="true"
+          />
         </div>
       </div>
 
