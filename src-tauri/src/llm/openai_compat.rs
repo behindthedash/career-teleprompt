@@ -2,7 +2,7 @@
 // Used by: OpenAI, Groq, OpenRouter, LM Studio
 
 use futures::StreamExt;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::time::Instant;
 use tauri::Emitter;
 
@@ -32,6 +32,44 @@ pub struct OpenAICompatClient {
     client: reqwest::Client,
 }
 
+/// OpenAI-compatible APIs commonly return a structured 400 when a model only
+/// accepts its provider-default temperature. Keep the detection deliberately
+/// narrow so unrelated request errors are never retried with changed semantics.
+fn is_unsupported_temperature_error(status: reqwest::StatusCode, response_body: &str) -> bool {
+    if status != reqwest::StatusCode::BAD_REQUEST {
+        return false;
+    }
+
+    let Ok(payload) = serde_json::from_str::<Value>(response_body) else {
+        return false;
+    };
+
+    let Some(error) = payload.get("error") else {
+        return false;
+    };
+    let param_is_temperature = error
+        .get("param")
+        .and_then(Value::as_str)
+        .is_some_and(|param| param == "temperature");
+    if !param_is_temperature {
+        return false;
+    }
+
+    let code_is_unsupported = error
+        .get("code")
+        .and_then(Value::as_str)
+        .is_some_and(|code| code == "unsupported_value");
+    let message_says_unsupported = error
+        .get("message")
+        .and_then(Value::as_str)
+        .map(|message| message.to_ascii_lowercase())
+        .is_some_and(|message| {
+            message.contains("unsupported") || message.contains("only the default")
+        });
+
+    code_is_unsupported || message_says_unsupported
+}
+
 impl OpenAICompatClient {
     pub fn new(config: OpenAICompatConfig) -> Self {
         let client = reqwest::Client::new();
@@ -48,6 +86,18 @@ impl OpenAICompatClient {
             builder = builder.header(key.as_str(), val.as_str());
         }
         builder
+    }
+
+    async fn send_completion_request(
+        &self,
+        url: &str,
+        body: &Value,
+    ) -> Result<reqwest::Response, reqwest::Error> {
+        self.apply_auth(self.client.post(url))
+            .header("Content-Type", "application/json")
+            .json(body)
+            .send()
+            .await
     }
 }
 
@@ -166,25 +216,54 @@ impl LLMProvider for OpenAICompatClient {
             body["max_tokens"] = json!(max_tok);
         }
 
-        let request = self
-            .apply_auth(self.client.post(&url))
-            .header("Content-Type", "application/json")
-            .json(&body);
-
         // NOTE: llm_stream_start is emitted by IntelligenceEngine::generate_assist()
         // with the correct mode. Do NOT emit it here — it would overwrite the mode.
 
-        let response = request.send().await.map_err(|e| {
+        let mut response = self.send_completion_request(&url, &body).await.map_err(|e| {
             let _ = app_handle.emit("llm_stream_error", e.to_string());
             e
         })?;
 
         if !response.status().is_success() {
             let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            let err_msg = format!("Completion request failed ({}): {}", status, body);
-            let _ = app_handle.emit("llm_stream_error", &err_msg);
-            return Err(LLMError::ProviderError(err_msg));
+            let response_body = response.text().await.unwrap_or_default();
+
+            // Some current OpenAI-compatible models only accept the provider's
+            // default temperature. The action layer intentionally supplies a
+            // configurable temperature, so make this model capability mismatch
+            // self-healing: retry exactly once with the optional field omitted.
+            if body.get("temperature").is_some()
+                && is_unsupported_temperature_error(status, &response_body)
+            {
+                if let Some(object) = body.as_object_mut() {
+                    object.remove("temperature");
+                }
+                log::warn!(
+                    "{} model '{}' rejected custom temperature; retrying with provider default",
+                    self.config.provider_name,
+                    model
+                );
+
+                response = self.send_completion_request(&url, &body).await.map_err(|e| {
+                    let _ = app_handle.emit("llm_stream_error", e.to_string());
+                    e
+                })?;
+
+                if !response.status().is_success() {
+                    let retry_status = response.status();
+                    let retry_body = response.text().await.unwrap_or_default();
+                    let err_msg = format!(
+                        "Completion request failed after retry with provider-default temperature ({}): {}",
+                        retry_status, retry_body
+                    );
+                    let _ = app_handle.emit("llm_stream_error", &err_msg);
+                    return Err(LLMError::ProviderError(err_msg));
+                }
+            } else {
+                let err_msg = format!("Completion request failed ({}): {}", status, response_body);
+                let _ = app_handle.emit("llm_stream_error", &err_msg);
+                return Err(LLMError::ProviderError(err_msg));
+            }
         }
 
         let mut stream = response.bytes_stream();
@@ -312,4 +391,59 @@ pub fn create_lm_studio_client(base_url: Option<&str>) -> OpenAICompatClient {
         auth_value: None,
         extra_headers: vec![],
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_unsupported_temperature_error;
+
+    #[test]
+    fn detects_openai_unsupported_temperature_error() {
+        let body = r#"{
+            "error": {
+                "message": "Unsupported value: 'temperature' does not support 0.3 with this model. Only the default (1) value is supported.",
+                "type": "invalid_request_error",
+                "param": "temperature",
+                "code": "unsupported_value"
+            }
+        }"#;
+
+        assert!(is_unsupported_temperature_error(
+            reqwest::StatusCode::BAD_REQUEST,
+            body
+        ));
+    }
+
+    #[test]
+    fn does_not_retry_unrelated_bad_request() {
+        let body = r#"{
+            "error": {
+                "message": "Unsupported value",
+                "type": "invalid_request_error",
+                "param": "top_p",
+                "code": "unsupported_value"
+            }
+        }"#;
+
+        assert!(!is_unsupported_temperature_error(
+            reqwest::StatusCode::BAD_REQUEST,
+            body
+        ));
+    }
+
+    #[test]
+    fn does_not_retry_non_bad_request() {
+        let body = r#"{
+            "error": {
+                "message": "Unsupported value",
+                "param": "temperature",
+                "code": "unsupported_value"
+            }
+        }"#;
+
+        assert!(!is_unsupported_temperature_error(
+            reqwest::StatusCode::UNAUTHORIZED,
+            body
+        ));
+    }
 }
