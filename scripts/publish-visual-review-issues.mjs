@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 const token = process.env.GITHUB_TOKEN;
 const repository = process.env.GITHUB_REPOSITORY;
 const runId = process.env.GITHUB_RUN_ID;
+const stepSummary = process.env.GITHUB_STEP_SUMMARY;
 
 if (!token || !repository) {
   throw new Error("GITHUB_TOKEN and GITHUB_REPOSITORY are required");
@@ -40,8 +41,8 @@ const headers = {
   "Content-Type": "application/json",
 };
 
-async function github(path, options = {}) {
-  const response = await fetch(`https://api.github.com${path}`, {
+async function github(apiPath, options = {}) {
+  const response = await fetch(`https://api.github.com${apiPath}`, {
     ...options,
     headers: { ...headers, ...(options.headers ?? {}) },
   });
@@ -51,6 +52,11 @@ async function github(path, options = {}) {
   }
   if (response.status === 204) return null;
   return response.json();
+}
+
+async function appendSummary(markdown) {
+  if (!stepSummary) return;
+  await fs.appendFile(stepSummary, `${markdown}\n`);
 }
 
 async function listOpenIssues() {
@@ -76,6 +82,14 @@ function issueBody(group) {
     .join("\n");
 
   return `${marker}\n## Automated visual/UX review finding\n\n**Severity:** ${group.severity}\n**Category:** ${group.category}\n\n${screenLines}\n\n### Suggested improvement\n\n${group.recommendation}\n\n### Evidence\n\nThe CI visual review captured the affected screens and stored the PNGs plus \`report.json\` and \`summary.md\` in the **career-teleprompt-visual-review** workflow artifact.\n\nLatest review run: ${runUrl}\n\n---\n_This issue is created and refreshed automatically. The workflow intentionally groups the same concern across screens so the issue tracker does not get flooded with duplicates._\n`;
+}
+
+const repoInfo = await github(`/repos/${owner}/${repo}`);
+if (!repoInfo.has_issues) {
+  const message = `GitHub Issues are disabled for ${repository}. Captured ${report.screenshotCount} screenshots and found ${grouped.size} medium/high finding group(s), but issue publication is paused until Issues are enabled in repository settings.`;
+  console.warn(`::warning title=Visual UX issue publishing paused::${message}`);
+  await appendSummary(`## Visual UX issue publishing paused\n\n${message}\n\nOnce Issues are enabled, rerun this workflow (or push to \`dev\`) and the findings will be created automatically.`);
+  process.exit(0);
 }
 
 const openIssues = await listOpenIssues();
@@ -105,4 +119,6 @@ for (const group of grouped.values()) {
   }
 }
 
-console.log(`Publishable finding groups: ${grouped.size}; issues created: ${created}; refreshed: ${updated}`);
+const result = `Publishable finding groups: ${grouped.size}; issues created: ${created}; refreshed: ${updated}`;
+console.log(result);
+await appendSummary(`## Visual UX issue publication\n\n${result}.`);
