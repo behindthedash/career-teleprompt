@@ -44,7 +44,7 @@ try {
   await checkpoint("launcher");
 
   // RAG search + streamed answer through the real Knowledge Base dialog.
-  const kbButton = page.getByRole("button", { name: /test.*(knowledge|kb)|knowledge base/i }).first();
+  const kbButton = page.getByRole("button", { name: "Test Knowledge Base", exact: true });
   await kbButton.waitFor({ state: "visible" });
   await kbButton.click();
   await page.getByRole("heading", { name: "Test Knowledge Base" }).waitFor();
