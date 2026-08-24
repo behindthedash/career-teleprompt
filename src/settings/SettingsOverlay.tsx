@@ -403,6 +403,7 @@ export function SettingsOverlay({ isModal = false }: SettingsOverlayProps) {
             </div>
           </div>
 
+          <h2 className="sr-only">{currentTabLabel} options</h2>
           <div key={activeTab} className="settings-content-enter">{renderTabContent()}</div>
         </section>
       </main>
