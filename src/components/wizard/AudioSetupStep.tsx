@@ -14,7 +14,6 @@ import {
   Volume2,
   RefreshCw,
   CheckCircle,
-  XCircle,
   Loader2,
   Wand2,
 } from "lucide-react";
@@ -29,7 +28,7 @@ export function AudioSetupStep() {
     setSystemDeviceId,
   } = useConfigStore();
 
-  const { micLevel, micPeak, systemLevel, systemPeak } = useAudioLevel();
+  const { micLevel, micPeak } = useAudioLevel();
 
   const [devices, setDevices] = useState<AudioDeviceList>({
     inputs: [],
@@ -256,13 +255,17 @@ export function AudioSetupStep() {
 
         {/* YOUR Source */}
         <div className="space-y-2.5">
-          <label className="flex items-center gap-2.5 text-sm font-medium text-foreground">
+          <label
+            htmlFor="wizard-you-audio-source"
+            className="flex items-center gap-2.5 text-sm font-medium text-foreground"
+          >
             <span className="rounded-lg bg-primary/10 px-2 py-1 text-meta font-semibold uppercase tracking-wide text-primary">
               You
             </span>
             Audio Source
           </label>
           <select
+            id="wizard-you-audio-source"
             value={config.you.device_id}
             onChange={(e) => {
               const isInput = devices.inputs.some((d) => d.id === e.target.value);
@@ -297,13 +300,17 @@ export function AudioSetupStep() {
 
         {/* THEIR Source */}
         <div className="space-y-2.5">
-          <label className="flex items-center gap-2.5 text-sm font-medium text-foreground">
+          <label
+            htmlFor="wizard-them-audio-source"
+            className="flex items-center gap-2.5 text-sm font-medium text-foreground"
+          >
             <span className="rounded-lg bg-muted px-2 py-1 text-meta font-semibold uppercase tracking-wide text-muted-foreground">
               Them
             </span>
             Audio Source
           </label>
           <select
+            id="wizard-them-audio-source"
             value={config.them.device_id}
             onChange={(e) => {
               const isInput = devices.inputs.some((d) => d.id === e.target.value);
