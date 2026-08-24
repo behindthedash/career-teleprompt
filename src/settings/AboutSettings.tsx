@@ -8,7 +8,7 @@ import { NEXQ_VERSION, NEXQ_BUILD_DATE, NEXQ_DEVELOPER } from "../lib/version";
 import { useUpdater } from "../hooks/useUpdater";
 import { open } from "@tauri-apps/plugin-shell";
 
-const GITHUB_URL = "https://github.com/VahidAlizadeh/NexQ";
+const GITHUB_URL = "https://github.com/behindthedash/career-teleprompt";
 
 function timeSince(ms: number): string {
   const secs = Math.floor((Date.now() - ms) / 1000);
@@ -53,14 +53,14 @@ export function AboutSettings() {
       {/* App Identity Card */}
       <div className="rounded-xl border border-border/30 bg-card/50 p-6">
         <div className="flex items-start gap-5">
-          <img src="/nexq-icon.png" alt="NexQ" className="h-14 w-14 shrink-0 rounded-2xl" />
+          <img src="/nexq-icon.png" alt="Career Teleprompt" className="h-14 w-14 shrink-0 rounded-2xl" />
           <div>
-            <h3 className="text-lg font-bold text-foreground">NexQ</h3>
+            <h3 className="text-lg font-bold text-foreground">Career Teleprompt</h3>
             <p className="text-xs text-muted-foreground">
               v{NEXQ_VERSION}
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              AI Meeting Assistant &amp; Real-Time Interview Copilot
+              Real-Time Interview Copilot &amp; Speech-Following Teleprompter
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center rounded-full bg-secondary/50 px-3 py-1 text-meta font-medium text-muted-foreground">
@@ -86,9 +86,9 @@ export function AboutSettings() {
           </p>
         </div>
         <div className="rounded-xl border border-border/30 bg-card/50 p-4">
-          <p className="text-meta text-muted-foreground/60">Developer</p>
+          <p className="text-meta text-muted-foreground/60">Foundation</p>
           <p className="mt-1 text-sm font-medium text-foreground">
-            {NEXQ_DEVELOPER}
+            NexQ · {NEXQ_DEVELOPER}
           </p>
         </div>
         <div className="rounded-xl border border-border/30 bg-card/50 p-4">
@@ -129,14 +129,16 @@ export function AboutSettings() {
               </p>
               <p className="text-meta text-muted-foreground/60">
                 {isChecking
-                  ? "Connecting to GitHub"
+                  ? "Connecting to Career Teleprompt releases"
                   : isError && checkError
                     ? checkError
                     : isAvailable && availableUpdate.date
                       ? `Released ${timeSince(new Date(availableUpdate.date).getTime())}`
                       : lastChecked
                         ? `Last checked ${timeSince(lastChecked)}`
-                        : "Not checked yet"}
+                        : isUpToDate
+                          ? "Career Teleprompt release channel"
+                          : "Not checked yet"}
               </p>
             </div>
           </div>
@@ -176,7 +178,7 @@ export function AboutSettings() {
           </span>
         </button>
         <button
-          onClick={() => open(`${GITHUB_URL}/blob/main/CHANGELOG.md`)}
+          onClick={() => open(`${GITHUB_URL}/blob/dev/CHANGELOG.md`)}
           className="flex flex-col items-center gap-2 rounded-xl border border-border/30 bg-card/50 p-4 transition-colors hover:bg-secondary/30"
         >
           <FileText className="h-4 w-4 text-muted-foreground" />
@@ -194,7 +196,7 @@ export function AboutSettings() {
           </span>
         </button>
         <button
-          onClick={() => open(`${GITHUB_URL}/wiki`)}
+          onClick={() => open(`${GITHUB_URL}/tree/dev/docs`)}
           className="flex flex-col items-center gap-2 rounded-xl border border-border/30 bg-card/50 p-4 transition-colors hover:bg-secondary/30"
         >
           <HelpCircle className="h-4 w-4 text-muted-foreground" />
@@ -207,8 +209,9 @@ export function AboutSettings() {
       {/* Footer */}
       <div className="rounded-xl border border-border/30 bg-card/50 p-5">
         <p className="text-xs text-muted-foreground/60 leading-relaxed">
-          NexQ is an open desktop application. All processing can run locally
-          with Ollama or LM Studio, or optionally connect to cloud AI providers.
+          Career Teleprompt is a Windows interview copilot built on the NexQ
+          open-source foundation. Interview context and the local RAG index can
+          remain on this device while cloud AI providers stay optional.
         </p>
       </div>
     </div>
