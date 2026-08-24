@@ -47,7 +47,8 @@ try {
   const kbButton = page.getByRole("button", { name: "Test Knowledge Base", exact: true });
   await kbButton.waitFor({ state: "visible" });
   await kbButton.click();
-  await page.getByRole("heading", { name: "Test Knowledge Base" }).waitFor();
+  const kbHeading = page.getByRole("heading", { name: "Test Knowledge Base" });
+  await kbHeading.waitFor();
   const ragQuery = "What AI and RAG experience does the candidate have?";
   await page.getByPlaceholder("Ask a question about your documents...").fill(ragQuery);
   await page.getByRole("button", { name: "Ask", exact: true }).click();
@@ -62,25 +63,36 @@ try {
   assert(ragCalls.some((call) => call.command === "test_rag_answer"), "RAG answer command was not invoked");
   await checkpoint("rag-search-and-answer");
   await page.locator('button[title="Close (Esc)"]').click();
+  await kbHeading.waitFor({ state: "hidden" });
 
-  // Start a real UI meeting flow and select interview mode.
-  await page.getByRole("button", { name: "Start Meeting", exact: true }).first().click();
+  // Start the actual launcher flow. The launcher button includes its Ctrl+M
+  // shortcut in the accessible name, so match the real name instead of forcing
+  // an exact text-only label.
+  const launcherStart = page.getByRole("button", { name: /^Start Meeting\b/ }).first();
+  await launcherStart.waitFor({ state: "visible" });
+  await launcherStart.click();
+
   const setupDialog = page.getByRole("dialog", { name: "Meeting setup" });
   await setupDialog.waitFor();
-  await setupDialog.getByRole("button", { name: /Online/i }).first().click();
-  const scenarioButton = setupDialog.getByRole("button", { name: /Team Meeting|Interview/i }).filter({ has: page.locator("svg") }).last();
-  if (await scenarioButton.count()) {
-    await scenarioButton.click();
-  } else {
-    await setupDialog.getByText("Team Meeting", { exact: true }).click();
-  }
-  const interviewOption = setupDialog.getByRole("button", { name: /Interview/i }).last();
-  if (await interviewOption.count()) await interviewOption.click();
+  await setupDialog.getByRole("button", { name: /^Online\b/ }).first().click();
+
+  // Open the real scenario picker and choose Interview.
+  await setupDialog.getByRole("button", { name: /^Team Meeting\b/ }).first().click();
+  const interviewOption = setupDialog.getByRole("button", { name: /^Interview\b/ }).last();
+  await interviewOption.waitFor({ state: "visible" });
+  await interviewOption.click();
   await setupDialog.getByRole("button", { name: "Start Meeting", exact: true }).click();
-  await page.getByRole("heading", { name: "CI Interview" }).waitFor();
+
+  await page.waitForFunction(() => {
+    const state = window.__CAREER_TELEPROMPT_WORKFLOW__?.state();
+    return state?.view === "overlay" && state.activeMeetingId === "workflow-meeting-001";
+  });
+  await page.getByText("CI Interview", { exact: true }).first().waitFor();
   await checkpoint("meeting-started");
 
-  // Simulate the native STT boundary: system audio becomes Interviewer transcript.
+  // Give the production event hooks a render turn after the launcher swaps to
+  // the overlay, then simulate the native STT boundary.
+  await page.waitForTimeout(100);
   const interviewerQuestion =
     "Can you walk me through how you would design a reliable real-time data pipeline?";
   await page.evaluate((text) => {
@@ -88,8 +100,8 @@ try {
   }, interviewerQuestion);
   await page.getByText(interviewerQuestion).waitFor();
 
-  // Click the production What to Say control. The mocked native command streams back
-  // through the same llm_stream_* event subscriptions used by the Tauri app.
+  // Click the production What to Say control. The mocked native command streams
+  // back through the same llm_stream_* subscriptions used by the Tauri app.
   await page.getByRole("button", { name: /What to Say/i }).click();
   await page.getByText(/I would design the pipeline around durable event streams/i).waitFor();
   await page.waitForFunction(() =>
@@ -131,24 +143,25 @@ try {
 
   // Exercise live teleprompter controls, not just rendering.
   const beforeFont = await page.evaluate(() => window.__CAREER_TELEPROMPT_WORKFLOW__?.state().teleprompter.fontSize);
-  await page.getByRole("button", { name: "Larger text" }).click();
+  await page.locator('button[title="Larger text"]').click();
   const afterFont = await page.evaluate(() => window.__CAREER_TELEPROMPT_WORKFLOW__?.state().teleprompter.fontSize);
   assert(Number(afterFont) > Number(beforeFont), "Larger text button did not change teleprompter font size");
 
-  const followerButton = page.getByRole("button", { name: /Following|Recovered|Holding|Lost|Ready/i }).first();
-  await followerButton.click();
-  await page.getByRole("button", { name: /Paused/i }).waitFor();
-  state = await bridgeState();
-  assert(state?.teleprompter.followingEnabled === false, "Pause control did not disable speech following");
-  await page.getByRole("button", { name: /Paused/i }).click();
-  state = await bridgeState();
-  assert(state?.teleprompter.followingEnabled === true, "Resume control did not re-enable speech following");
+  await page.locator('button[title="Pause speech following"]').click();
+  await page.waitForFunction(() =>
+    window.__CAREER_TELEPROMPT_WORKFLOW__?.state().teleprompter.followingEnabled === false
+  );
+  await page.locator('button[title="Resume speech following"]').click();
+  await page.waitForFunction(() =>
+    window.__CAREER_TELEPROMPT_WORKFLOW__?.state().teleprompter.followingEnabled === true
+  );
   await checkpoint("teleprompter-following");
 
-  // End the meeting and prove the control returns the workflow to the launcher.
-  const endButton = page.getByRole("button", { name: /End Meeting|Stop Meeting|End/i }).last();
+  // End the meeting and prove the real control returns to the launcher.
+  const endButton = page.getByRole("button", { name: "End meeting", exact: true });
   await endButton.waitFor({ state: "visible" });
   await endButton.click();
+  await page.waitForFunction(() => window.__CAREER_TELEPROMPT_WORKFLOW__?.state().view === "launcher");
   await page.getByRole("heading", { name: "NexQ" }).waitFor();
   await checkpoint("meeting-ended");
 } catch (error) {
