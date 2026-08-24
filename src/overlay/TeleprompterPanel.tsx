@@ -338,6 +338,8 @@ export function TeleprompterPanel() {
 
         <div
           ref={scrollRef}
+          tabIndex={0}
+          aria-label="Teleprompter script"
           className="h-full overflow-y-auto overscroll-contain px-[8%] scroll-smooth"
         >
           <div className="h-[42%] min-h-16" aria-hidden="true" />
