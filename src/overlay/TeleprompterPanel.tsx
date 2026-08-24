@@ -19,6 +19,7 @@ import type { TeleprompterFormat } from "../teleprompter/content";
 import {
   buildDisplaySections,
   findReadingPieceIndex,
+  parseSeekToken,
   pieceReadingState,
 } from "../teleprompter/display";
 import {
@@ -54,6 +55,7 @@ export function TeleprompterPanel() {
   const setLineHeight = useTeleprompterStore((state) => state.setLineHeight);
   const setFollowingEnabled = useTeleprompterStore((state) => state.setFollowingEnabled);
   const setActiveSection = useTeleprompterStore((state) => state.setActiveSection);
+  const seekToken = useTeleprompterStore((state) => state.seekToken);
   const activatePendingDocument = useTeleprompterStore((state) => state.activatePendingDocument);
   const dismissPendingDocument = useTeleprompterStore((state) => state.dismissPendingDocument);
 
@@ -105,6 +107,24 @@ export function TeleprompterPanel() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [nextSection, previousSection]);
+
+  const handleReadingClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+
+    const tokenTarget = target.closest<HTMLElement>("[data-teleprompter-token-start]");
+    const token = parseSeekToken(tokenTarget?.dataset.teleprompterTokenStart);
+    if (token !== null) {
+      seekToken(token);
+      return;
+    }
+
+    const sectionTarget = target.closest<HTMLElement>("[data-teleprompter-section-index]");
+    const sectionIndex = Number(sectionTarget?.dataset.teleprompterSectionIndex);
+    if (Number.isInteger(sectionIndex)) {
+      setActiveSection(sectionIndex);
+    }
+  };
 
   const applyDraft = () => {
     try {
@@ -340,6 +360,8 @@ export function TeleprompterPanel() {
           ref={scrollRef}
           tabIndex={0}
           aria-label="Teleprompter reading content"
+          onClick={handleReadingClick}
+          title="Click a phrase to move the reading position; Page Up and Page Down navigate sections"
           className="h-full overflow-y-auto overscroll-contain px-[8%] scroll-smooth focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40"
         >
           <div className="h-[42%] min-h-16" aria-hidden="true" />
@@ -352,7 +374,7 @@ export function TeleprompterPanel() {
               return (
                 <div
                   key={displaySection.section.id}
-                  onClick={() => setActiveSection(sectionIndex)}
+                  data-teleprompter-section-index={sectionIndex}
                   className={`cursor-pointer whitespace-pre-wrap transition-opacity duration-200 ${
                     active ? "opacity-100" : "opacity-80 hover:opacity-100"
                   }`}
@@ -379,7 +401,8 @@ export function TeleprompterPanel() {
                       <span
                         key={`${piece.tokenStart}-${pieceIndex}`}
                         ref={isReadingPiece ? readingPieceRef : undefined}
-                        className={className}
+                        data-teleprompter-token-start={piece.tokenStart}
+                        className={`${className} cursor-pointer rounded-sm hover:bg-primary/10`}
                       >
                         {piece.text}
                       </span>
@@ -407,7 +430,7 @@ export function TeleprompterPanel() {
             ? followerStatus === "uncertain" || followerStatus === "lost"
               ? "Holding position — keep speaking or use manual navigation"
               : "Speech controls the reading position"
-            : "Manual override — press Paused to resume following"}
+            : "Manual override — click a phrase or press Paused to resume following"}
         </span>
         <button
           onClick={nextSection}

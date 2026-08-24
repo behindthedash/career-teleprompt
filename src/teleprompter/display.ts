@@ -56,6 +56,13 @@ export function sectionStartToken(
   return sections[clamped].tokenStart;
 }
 
+/** Parse a token coordinate emitted by the reading surface's data attributes. */
+export function parseSeekToken(value: string | null | undefined): number | null {
+  if (value === null || value === undefined || value.trim() === "") return null;
+  const token = Number(value);
+  return Number.isInteger(token) && token >= 0 ? token : null;
+}
+
 export function findReadingPieceIndex(
   pieces: TeleprompterDisplayPiece[],
   cursorTokenIndex: number,
