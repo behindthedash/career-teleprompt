@@ -19,6 +19,12 @@ export interface AlignmentResult {
   spokenTokens: string[];
 }
 
+interface CandidateMatch {
+  end: number;
+  score: number;
+  anchorBoost: number;
+}
+
 const DEFAULT_OPTIONS: Required<AlignmentOptions> = {
   maxSpokenTokens: 14,
   forwardWindow: 60,
@@ -98,7 +104,9 @@ export function alignTranscript(
   }
 
   // A strong match well beyond the local reading window is treated as an intentional jump.
-  if (localEnd < expectedTokens.length && spokenTokens.length >= 5) {
+  // Four spoken words are enough only when they form a distinctive anchor that appears once
+  // in the prepared document; otherwise recovery retains the safer five-token minimum.
+  if (localEnd < expectedTokens.length && spokenTokens.length >= 4) {
     const recovery = searchCandidateWindows(
       expectedTokens,
       spokenTokens,
@@ -107,7 +115,11 @@ export function alignTranscript(
       previous,
       resolved.lengthSlack,
     );
-    if (recovery.score >= resolved.recoveryThreshold) {
+    const hasDistinctiveRecoveryAnchor = recovery.anchorBoost >= 0.08;
+    const hasEnoughRecoveryEvidence =
+      spokenTokens.length >= 5 || hasDistinctiveRecoveryAnchor;
+
+    if (hasEnoughRecoveryEvidence && recovery.score >= resolved.recoveryThreshold) {
       return {
         position: Math.max(previous, recovery.end),
         confidence: recovery.score,
@@ -135,8 +147,8 @@ function searchCandidateWindows(
   lastEnd: number,
   previousPosition: number,
   lengthSlack: number,
-): { end: number; score: number } {
-  let best = { end: previousPosition, score: 0 };
+): CandidateMatch {
+  let best: CandidateMatch = { end: previousPosition, score: 0, anchorBoost: 0 };
 
   for (let end = firstEnd; end <= lastEnd; end += 1) {
     const minLength = Math.max(2, spokenTokens.length - lengthSlack);
@@ -144,7 +156,15 @@ function searchCandidateWindows(
 
     for (let length = minLength; length <= maxLength; length += 1) {
       const expectedWindow = expectedTokens.slice(end - length, end);
-      let score = sequenceScore(spokenTokens, expectedWindow);
+      const anchorBoost = distinctiveAnchorBoost(
+        spokenTokens,
+        expectedWindow,
+        expectedTokens,
+      );
+      let score = Math.min(
+        1,
+        sequenceScore(spokenTokens, expectedWindow) + anchorBoost,
+      );
 
       // Prefer the closest plausible continuation when a common phrase appears more than once.
       const expectedAdvance = Math.max(1, spokenTokens.length);
@@ -155,12 +175,81 @@ function searchCandidateWindows(
         score > best.score + Number.EPSILON ||
         (Math.abs(score - best.score) <= Number.EPSILON && end < best.end)
       ) {
-        best = { end, score };
+        best = { end, score, anchorBoost };
       }
     }
   }
 
   return best;
+}
+
+/**
+ * Confidence boost for an exact contiguous phrase that occurs only once in the prepared document.
+ *
+ * Exactness is intentional: fuzzy token matching already handles STT noise in sequenceScore. The
+ * anchor exists only to break ambiguity when the speaker says a distinctive prepared phrase.
+ * Repeated/common phrases receive no boost, so they continue to prefer the closest monotonic match.
+ */
+export function distinctiveAnchorBoost(
+  spokenTokens: string[],
+  expectedWindow: string[],
+  documentExpectedTokens: string[],
+): number {
+  const maxAnchorLength = Math.min(
+    5,
+    spokenTokens.length,
+    expectedWindow.length,
+  );
+
+  for (let length = maxAnchorLength; length >= 3; length -= 1) {
+    for (let spokenStart = 0; spokenStart <= spokenTokens.length - length; spokenStart += 1) {
+      const phrase = spokenTokens.slice(spokenStart, spokenStart + length);
+
+      for (
+        let expectedStart = 0;
+        expectedStart <= expectedWindow.length - length;
+        expectedStart += 1
+      ) {
+        let matches = true;
+        for (let offset = 0; offset < length; offset += 1) {
+          if (phrase[offset] !== expectedWindow[expectedStart + offset]) {
+            matches = false;
+            break;
+          }
+        }
+        if (!matches) continue;
+
+        if (countContiguousOccurrences(documentExpectedTokens, phrase) !== 1) {
+          continue;
+        }
+
+        if (length >= 5) return 0.12;
+        if (length === 4) return 0.1;
+        return 0.06;
+      }
+    }
+  }
+
+  return 0;
+}
+
+function countContiguousOccurrences(tokens: string[], phrase: string[]): number {
+  if (phrase.length === 0 || phrase.length > tokens.length) return 0;
+  let count = 0;
+
+  for (let start = 0; start <= tokens.length - phrase.length; start += 1) {
+    let matches = true;
+    for (let offset = 0; offset < phrase.length; offset += 1) {
+      if (tokens[start + offset] !== phrase[offset]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) count += 1;
+    if (count > 1) return count;
+  }
+
+  return count;
 }
 
 /** Ordered fuzzy overlap score that tolerates filler words and omitted prepared words. */
