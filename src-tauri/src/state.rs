@@ -75,8 +75,12 @@ pub struct AppState {
     /// Read lock-free by the system STT task; written by the settings IPC.
     pub pause_threshold_ms: Arc<AtomicU64>,
     /// Stop signal for the Live Monitor background thread.
-    /// true = thread is running (keep looping); false = thread should stop.
+    /// true = a monitor generation is allowed to run; false = all should stop.
     pub device_monitor_running: Arc<AtomicBool>,
+    /// Monotonic generation for Live Monitor ownership. A newly-started monitor
+    /// invalidates every older worker even if an old worker wakes after `running`
+    /// has already been set true again.
+    pub device_monitor_generation: Arc<AtomicU64>,
     /// Per-party mute flags — when true, audio is NOT forwarded to the STT engine.
     /// Audio levels + recording continue unaffected.
     pub you_muted: Arc<AtomicBool>,
@@ -123,6 +127,7 @@ impl AppState {
             shared_groq_config: Arc::new(RwLock::new(GroqConfig::default())),
             pause_threshold_ms: Arc::new(AtomicU64::new(3000)),
             device_monitor_running: Arc::new(AtomicBool::new(false)),
+            device_monitor_generation: Arc::new(AtomicU64::new(0)),
             you_muted: Arc::new(AtomicBool::new(false)),
             them_muted: Arc::new(AtomicBool::new(false)),
             original_default_device: Arc::new(Mutex::new(None)),
