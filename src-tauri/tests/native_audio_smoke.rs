@@ -24,7 +24,16 @@ fn synthetic_pcm_survives_windows_audio_normalization() {
     let mono_16k = resample(&stereo_48k, 48_000, 16_000, 2);
 
     assert!((3_950..=4_050).contains(&mono_16k.len()));
-    assert!(calculate_peak(&mono_16k) > 5_000.0);
+
+    // calculate_peak returns a normalized 0.0..=1.0 value. Averaging the
+    // 12,000-amplitude left channel with the half-amplitude right channel
+    // produces a ~9,000-amplitude mono signal before resampling.
+    let expected_peak = 9_000.0 / i16::MAX as f32;
+    let actual_peak = calculate_peak(&mono_16k);
+    assert!(
+        (actual_peak - expected_peak).abs() < 0.02,
+        "expected normalized peak near {expected_peak:.3}, got {actual_peak:.3}"
+    );
     assert!(calculate_rms(&mono_16k) > 1_000.0);
 }
 
