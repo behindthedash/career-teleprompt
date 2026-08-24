@@ -239,11 +239,7 @@ export function LauncherView() {
   }
 
   return (
-    <div
-      className="flex h-full flex-col bg-background"
-      role="main"
-      aria-labelledby="launcher-heading"
-    >
+    <div className="flex h-full flex-col bg-background">
       {/* ═══ HEADER ═══ */}
       <header className="dash-header flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-b border-border/20">
         <div className="flex items-center gap-2.5">
@@ -277,7 +273,7 @@ export function LauncherView() {
       </header>
 
       {/* ═══ MAIN DASHBOARD ═══ */}
-      <div className="flex flex-1 overflow-hidden">
+      <main className="flex flex-1 overflow-hidden" aria-labelledby="launcher-heading">
 
         {/* ── LEFT: MEETINGS SIDEBAR ── */}
         <div className="dash-sidebar flex w-[280px] min-w-[220px] shrink flex-col border-r border-border/10 bg-card/20">
@@ -508,7 +504,7 @@ export function LauncherView() {
 
           </div>
         </div>
-      </div>
+      </main>
 
       {/* ═══ FOOTER ═══ */}
       <footer className="dash-footer flex items-center justify-between border-t border-border/20">
