@@ -93,9 +93,12 @@ export function DevLogPanel({
 /** Full-page DevLog for the detached window. */
 export function DevLogFullPage() {
   return (
-    <div className="flex h-screen w-screen flex-col bg-background text-foreground">
-      <DevLogContent />
-    </div>
+    <main
+      className="flex h-screen w-screen flex-col bg-background text-foreground"
+      aria-labelledby="devlog-page-heading"
+    >
+      <DevLogContent fullPage />
+    </main>
   );
 }
 
@@ -106,9 +109,11 @@ type FilterCategory = (typeof FILTER_CATEGORIES)[number];
 function DevLogContent({
   onClose,
   onDetach,
+  fullPage = false,
 }: {
   onClose?: () => void;
   onDetach?: () => void;
+  fullPage?: boolean;
 } = {}) {
   const entries = useDevLogStore((s) => s.entries);
   const clear = useDevLogStore((s) => s.clear);
@@ -157,9 +162,18 @@ function DevLogContent({
     <>
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-border/20 px-3 py-1.5">
-        <span className="text-meta font-semibold uppercase tracking-wider text-muted-foreground/70">
-          Dev Log
-        </span>
+        {fullPage ? (
+          <h1
+            id="devlog-page-heading"
+            className="text-meta font-semibold uppercase tracking-wider text-muted-foreground/70"
+          >
+            Dev Log
+          </h1>
+        ) : (
+          <span className="text-meta font-semibold uppercase tracking-wider text-muted-foreground/70">
+            Dev Log
+          </span>
+        )}
         <div className="flex items-center gap-1.5">
           {/* Category filter buttons */}
           {FILTER_CATEGORIES.map((cat) => (
