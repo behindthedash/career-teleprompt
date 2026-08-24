@@ -602,6 +602,7 @@ export function TranslationSettings() {
                       setConnectionStatus("idle");
                       setStatusMessage("");
                     }}
+                    aria-label={`${currentProviderOption?.label || selectedProvider} API key`}
                     placeholder={
                       hasStoredKey && !keyDirty
                         ? "Key stored — type to replace"
@@ -699,8 +700,9 @@ export function TranslationSettings() {
               {/* Azure Region dropdown (Microsoft only) */}
               {currentProviderOption?.needsRegion && (
                 <div className="mt-3">
-                  <label className="mb-1.5 block text-xs font-medium text-foreground">Azure Region</label>
+                  <label htmlFor="translation-azure-region" className="mb-1.5 block text-xs font-medium text-foreground">Azure Region</label>
                   <select
+                    id="translation-azure-region"
                     value={azureRegion}
                     onChange={(e) => setAzureRegion(e.target.value)}
                     className="w-full rounded-lg border border-border/50 bg-background px-3.5 py-2.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20 cursor-pointer"
@@ -819,8 +821,9 @@ export function TranslationSettings() {
 
             <div className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-foreground">Target Language</label>
+                <label htmlFor="translation-target-language" className="mb-1.5 block text-xs font-medium text-foreground">Target Language</label>
                 <select
+                  id="translation-target-language"
                   value={targetLang}
                   onChange={(e) => setTargetLang(e.target.value)}
                   className="w-full rounded-lg border border-border/50 bg-background px-3.5 py-2.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20 cursor-pointer"
@@ -836,8 +839,9 @@ export function TranslationSettings() {
                 </p>
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-foreground">Source Language</label>
+                <label htmlFor="translation-source-language" className="mb-1.5 block text-xs font-medium text-foreground">Source Language</label>
                 <select
+                  id="translation-source-language"
                   value={sourceLang}
                   onChange={(e) => setSourceLang(e.target.value)}
                   className="w-full rounded-lg border border-border/50 bg-background px-3.5 py-2.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20 cursor-pointer"
@@ -986,6 +990,7 @@ function ToggleRow({
       <button
         role="switch"
         aria-checked={checked}
+        aria-label={label}
         onClick={() => onChange(!checked)}
         className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ${
           checked ? "bg-primary" : "bg-muted-foreground/30"
