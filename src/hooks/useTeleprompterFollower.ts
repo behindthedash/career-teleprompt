@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useTeleprompterStore } from "../stores/teleprompterStore";
 import { useTranscriptStore } from "../stores/transcriptStore";
+import { shouldActivatePendingAnswer } from "../teleprompter/completion";
 import { alignTranscript, documentTokens } from "../teleprompter/follower";
 
 /**
@@ -40,5 +41,18 @@ export function useTeleprompterFollower() {
       state.cursorTokenIndex,
     );
     state.applyFollowerAlignment(result);
+
+    if (
+      shouldActivatePendingAnswer({
+        hasPendingDocument: state.pendingDocument !== null,
+        followingEnabled: state.followingEnabled,
+        followerStatus: result.status,
+        confidence: result.confidence,
+        cursorPosition: result.position,
+        totalTokens: expectedTokens.length,
+      })
+    ) {
+      state.activatePendingDocument();
+    }
   }, [document, expectedTokens, followingEnabled, userTranscript]);
 }
