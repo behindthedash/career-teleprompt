@@ -506,9 +506,10 @@ export function MeetingAudioSettings() {
             <button
               onClick={loadDevices}
               disabled={loadingDevices}
+              aria-label="Refresh audio devices"
               className="cursor-pointer rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-foreground"
             >
-              <RefreshCw className={`h-3 w-3 ${loadingDevices ? "animate-spin" : ""}`} />
+              <RefreshCw aria-hidden="true" className={`h-3 w-3 ${loadingDevices ? "animate-spin" : ""}`} />
             </button>
           </div>
           <div className="space-y-1.5">
@@ -548,9 +549,10 @@ export function MeetingAudioSettings() {
               <button
                 onClick={loadSessions}
                 disabled={loadingSessions}
+                aria-label="Refresh audio sessions"
                 className="cursor-pointer rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-foreground"
               >
-                <RefreshCw className={`h-3 w-3 ${loadingSessions ? "animate-spin" : ""}`} />
+                <RefreshCw aria-hidden="true" className={`h-3 w-3 ${loadingSessions ? "animate-spin" : ""}`} />
               </button>
             </div>
             {sessions.length === 0 ? (
@@ -660,6 +662,7 @@ function PartyPanel({
   const c = PARTY_CONFIG[role];
   const inputDevices = allDevices.filter((d) => d.group === "Microphones");
   const outputDevices = allDevices.filter((d) => d.group === "Speakers / Output");
+  const sourceSelectId = `meeting-audio-${role}-source`;
 
   // Amplify then sqrt for perceptual sensitivity — 2.5× gain makes typical peaks fill the bar
   const amplified = Math.min(level * 2.5, 1);
@@ -744,10 +747,12 @@ function PartyPanel({
 
         {/* Source device */}
         <div>
-          <label className="mb-1.5 block text-meta font-semibold uppercase tracking-wider text-muted-foreground/60">
+          <label htmlFor={sourceSelectId} className="mb-1.5 block text-meta font-semibold uppercase tracking-wider text-muted-foreground/60">
             Source
           </label>
           <select
+            id={sourceSelectId}
+            aria-label={`${label} audio source`}
             value={party.device_id}
             onChange={(e) => handleDeviceChange(e.target.value)}
             disabled={loadingDevices}
@@ -803,6 +808,7 @@ function PartyPanel({
             localEngines={localEngines}
             otherPartyProvider={otherPartyProvider}
             otherPartyLabel={otherPartyLabel}
+            ariaLabel={`${label} speech-to-text provider`}
             onChange={handleProviderChange}
           />
         </div>
@@ -835,6 +841,7 @@ function ProviderSelect({
   localEngines,
   otherPartyProvider,
   otherPartyLabel,
+  ariaLabel,
   onChange,
 }: {
   value: STTProviderType;
@@ -843,6 +850,7 @@ function ProviderSelect({
   localEngines: LocalSTTEngineInfo[];
   otherPartyProvider: STTProviderType | null;
   otherPartyLabel: string;
+  ariaLabel: string;
   onChange: (val: STTProviderType) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -967,6 +975,9 @@ function ProviderSelect({
     <div className="relative" ref={ref}>
       <button
         type="button"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         onClick={() => setOpen(!open)}
         className={`flex w-full cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors ${
           open
