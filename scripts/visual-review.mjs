@@ -268,6 +268,23 @@ try {
     const layout = await page.evaluate(() => {
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
+
+      const isInsideScrollableRegion = (element) => {
+        let ancestor = element.parentElement;
+        while (ancestor && ancestor !== document.body && ancestor !== document.documentElement) {
+          const style = getComputedStyle(ancestor);
+          const scrollsHorizontally =
+            (style.overflowX === "auto" || style.overflowX === "scroll") &&
+            ancestor.scrollWidth > ancestor.clientWidth + 2;
+          const scrollsVertically =
+            (style.overflowY === "auto" || style.overflowY === "scroll") &&
+            ancestor.scrollHeight > ancestor.clientHeight + 2;
+          if (scrollsHorizontally || scrollsVertically) return true;
+          ancestor = ancestor.parentElement;
+        }
+        return false;
+      };
+
       const interactive = Array.from(document.querySelectorAll("button, a[href], input, select, textarea, [role='button'], [role='tab'], [tabindex]"))
         .filter((el) => {
           const style = getComputedStyle(el);
@@ -292,11 +309,16 @@ try {
             top: Math.round(rect.top),
             right: Math.round(rect.right),
             bottom: Math.round(rect.bottom),
+            insideScrollableRegion: isInsideScrollableRegion(el),
           };
         });
 
       const unlabeled = interactive.filter((item) => !item.label);
-      const offscreen = interactive.filter((item) => item.right > viewportWidth + 2 || item.left < -2 || item.bottom > viewportHeight + 2 || item.top < -2);
+      const offscreen = interactive.filter(
+        (item) =>
+          !item.insideScrollableRegion &&
+          (item.right > viewportWidth + 2 || item.left < -2 || item.bottom > viewportHeight + 2 || item.top < -2),
+      );
       const tinyTargets = interactive.filter((item) => item.width < 24 || item.height < 24);
       const documentOverflow = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - viewportWidth;
       const headings = Array.from(document.querySelectorAll("h1, h2, [role='heading']"))
@@ -352,7 +374,7 @@ try {
         rule: "interactive-control-offscreen",
         issueKey: "layout:interactive-control-offscreen",
         title: "Interactive controls extend outside the visible screen",
-        details: `${layout.offscreen.length} visible interactive control(s) extend outside the viewport. Examples: ${sample}.`,
+        details: `${layout.offscreen.length} visible interactive control(s) extend outside the viewport without an intentional scroll region. Examples: ${sample}.`,
         recommendation: "Keep primary controls within the visible application window or place them in an intentional, discoverable scroll region.",
       });
     }
