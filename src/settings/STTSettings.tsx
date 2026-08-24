@@ -642,6 +642,7 @@ export function STTSettings() {
                     ? "Key stored — type to replace"
                     : `Enter ${currentProviderOption.label} API key`
                 }
+                aria-label={`${currentProviderOption.label} API key`}
                 className="w-full rounded-lg border border-border/50 bg-background px-3.5 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
               />
               <button
@@ -723,6 +724,7 @@ export function STTSettings() {
             onChange={(e) => setAzureRegion(e.target.value)}
             onBlur={handleSaveRegion}
             placeholder="eastus"
+            aria-label="Azure Speech region"
             className="w-full rounded-lg border border-border/50 bg-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
           />
           <p className="mt-1.5 text-xs text-muted-foreground">
@@ -916,6 +918,8 @@ function PauseThresholdSetting() {
           step={100}
           value={pauseThresholdMs}
           onChange={(e) => setPauseThresholdMs(parseInt(e.target.value))}
+          aria-label="New line pause duration"
+          aria-valuetext={`${(pauseThresholdMs / 1000).toFixed(1)} seconds`}
           className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-muted accent-primary"
         />
         <span className="min-w-[4rem] text-right text-xs font-mono text-primary tabular-nums">
@@ -1094,6 +1098,9 @@ function DeepgramAdvancedSettings() {
           </div>
           <button
             onClick={() => updateField("endpointing", deepgramConfig.endpointing === null ? 300 : null)}
+            role="switch"
+            aria-checked={deepgramConfig.endpointing !== null}
+            aria-label="Enable Deepgram endpointing"
             className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${
               deepgramConfig.endpointing !== null ? "bg-primary" : "bg-muted"
             }`}
@@ -1116,6 +1123,8 @@ function DeepgramAdvancedSettings() {
               step={10}
               value={deepgramConfig.endpointing}
               onChange={(e) => updateField("endpointing", parseInt(e.target.value))}
+              aria-label="Deepgram endpointing silence threshold"
+              aria-valuetext={`${deepgramConfig.endpointing} milliseconds`}
               className="w-full h-1.5 rounded-full bg-muted appearance-none cursor-pointer accent-primary"
             />
             <div className="flex justify-between mt-0.5">
@@ -1135,6 +1144,7 @@ function DeepgramAdvancedSettings() {
       {/* Advanced toggle */}
       <button
         onClick={() => setShowAdvanced(!showAdvanced)}
+        aria-expanded={showAdvanced}
         className="flex w-full items-center justify-between px-5 py-2.5 text-xs text-muted-foreground hover:bg-accent/30 transition-colors"
       >
         <span className="font-medium">Advanced Settings</span>
@@ -1191,6 +1201,7 @@ function DeepgramAdvancedSettings() {
                 onChange={(e) => setKeytermInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") addKeyterm(); }}
                 placeholder="Add keyterm or phrase…"
+                aria-label="Deepgram keyterm"
                 className="flex-1 rounded-lg border border-border/50 bg-background px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
               />
               <button
@@ -1211,6 +1222,7 @@ function DeepgramAdvancedSettings() {
                     {term}
                     <button
                       onClick={() => removeKeyterm(term)}
+                      aria-label={`Remove keyterm ${term}`}
                       className="text-muted-foreground hover:text-destructive transition-colors"
                     >
                       ×
@@ -1255,6 +1267,9 @@ function DeepgramToggle({
       </div>
       <button
         onClick={() => onChange(!checked)}
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
         className={`shrink-0 relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${
           checked ? "bg-primary" : "bg-muted"
         }`}
@@ -1500,6 +1515,8 @@ function GroqAdvancedSettings() {
           step={0.5}
           value={groqConfig.segment_duration_secs}
           onChange={(e) => updateField("segment_duration_secs", parseFloat(e.target.value))}
+          aria-label="Groq batch duration"
+          aria-valuetext={`${groqConfig.segment_duration_secs.toFixed(1)} seconds`}
           className="w-full h-1.5 rounded-full bg-muted appearance-none cursor-pointer accent-primary"
         />
         <div className="flex justify-between mt-0.5">
@@ -1514,6 +1531,7 @@ function GroqAdvancedSettings() {
       {/* Advanced toggle */}
       <button
         onClick={() => setShowAdvanced(!showAdvanced)}
+        aria-expanded={showAdvanced}
         className="flex w-full items-center justify-between px-5 py-2.5 text-xs text-muted-foreground hover:bg-accent/30 transition-colors"
       >
         <span className="font-medium">Advanced Settings</span>
@@ -1538,6 +1556,8 @@ function GroqAdvancedSettings() {
               step={0.1}
               value={groqConfig.temperature}
               onChange={(e) => updateField("temperature", parseFloat(e.target.value))}
+              aria-label="Groq transcription temperature"
+              aria-valuetext={groqConfig.temperature.toFixed(1)}
               className="w-full h-1.5 rounded-full bg-muted appearance-none cursor-pointer accent-primary"
             />
             <div className="flex justify-between mt-0.5">
@@ -1625,6 +1645,7 @@ function GroqAdvancedSettings() {
               value={groqConfig.prompt}
               onChange={(e) => updateField("prompt", e.target.value)}
               placeholder="e.g., NexQ, Tauri, WASAPI, transcription..."
+              aria-label="Groq transcription prompt"
               rows={2}
               className="w-full rounded-lg border border-border/50 bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20 resize-none"
             />
@@ -1730,6 +1751,8 @@ function SliderSetting({
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
+        aria-label={label}
+        aria-valuetext={`${value.toFixed(1)}${unit}`}
         className="w-full h-1.5 rounded-full bg-muted appearance-none cursor-pointer accent-primary"
       />
       <p className="mt-0.5 text-meta text-muted-foreground/60">{hint}</p>
