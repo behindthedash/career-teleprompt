@@ -1,8 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
     <title>Career Teleprompt Visual Review</title>
     <script>
       // Minimal Tauri bridge used only by the browser-based visual review harness.
@@ -35,12 +36,25 @@
           list_meetings: json([]),
           search_meetings: json([]),
           list_opus_mt_models: json([]),
-          get_audio_sessions: json([]),
-          get_token_budget: json({ used: 0, available: 8192, total: 8192 }),
-          get_rag_status: json({ ready: false, document_count: 0, chunk_count: 0 }),
-          get_rag_config: json({ enabled: false, embedding_provider: "ollama", embedding_model: "nomic-embed-text", top_k: 5 }),
+          get_token_budget: json({ total: 0, limit: 8192, segments: [] }),
+          get_rag_status: json({ total_files: 0, indexed_files: 0, total_chunks: 0, total_tokens: 0, last_indexed_at: null }),
+          get_rag_config: json({
+            enabled: false,
+            embedding_model: "nomic-embed-text",
+            ollama_url: "http://127.0.0.1:11434",
+            batch_size: 16,
+            chunk_size: 800,
+            chunk_overlap: 120,
+            splitting_strategy: "recursive",
+            top_k: 5,
+            search_mode: "hybrid",
+            similarity_threshold: 0.3,
+            semantic_weight: 0.7,
+            include_transcript: true,
+            embedding_dimensions: 768,
+          }),
           test_rag_search: json([]),
-          test_ollama_embedding_connection: json({ connected: false, model_available: false }),
+          test_ollama_embedding_connection: json({ connected: false, models: [] }),
           get_mute_status: json({ you: false, them: false }),
           ensure_ipolicy_override: json({ active: false, was_drifted: false }),
           estimate_deepgram_cost: json({ cost_usd: 0, streams: 2, rate_per_min: 0 }),
@@ -55,10 +69,14 @@
 
         const falseCommands = /(^|_)(is|has|check|running|available|enabled)(_|$)/i;
 
+        window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+          unregisterListener: () => {},
+        };
+
         window.__TAURI_INTERNALS__ = {
           metadata: {
             currentWindow: { label: "launcher" },
-            currentWebview: { label: "launcher" },
+            currentWebview: { windowLabel: "launcher", label: "launcher" },
           },
           invoke: async (command) => {
             if (command in jsonResults) return jsonResults[command];
@@ -74,7 +92,6 @@
           },
           transformCallback: () => callbackId++,
           unregisterCallback: () => {},
-          unregisterListener: () => {},
           convertFileSrc: (path) => path,
         };
       })();
