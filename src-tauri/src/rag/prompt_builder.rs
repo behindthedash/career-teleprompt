@@ -23,9 +23,15 @@ pub fn build_rag_context(chunks: &[ScoredChunk], custom_instructions: &str) -> S
         return parts.join("\n");
     }
 
+    // Prepared Q&A is an authored reference-document concept, not a transcript concept.
+    // A transcript can legitimately contain the words "Question:" / "Answer:" and must
+    // never be upgraded into user-authored prepared interview wording just because it
+    // happens to match the textual structure.
     let (prepared, general): (Vec<&ScoredChunk>, Vec<&ScoredChunk>) = chunks
         .iter()
-        .partition(|chunk| prepared_qa_question(&chunk.text).is_some());
+        .partition(|chunk| {
+            chunk.source_type != "transcript" && prepared_qa_question(&chunk.text).is_some()
+        });
 
     if !prepared.is_empty() {
         parts.push(
@@ -128,10 +134,13 @@ pub fn prepared_qa_question(text: &str) -> Option<String> {
 }
 
 fn strip_prefix_case_insensitive<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
-    if value.len() < prefix.len() || !value[..prefix.len()].eq_ignore_ascii_case(prefix) {
+    // Rust strings are UTF-8. Never slice at a byte offset until `get` has verified
+    // that the prefix boundary is also a valid character boundary.
+    let candidate = value.get(..prefix.len())?;
+    if !candidate.eq_ignore_ascii_case(prefix) {
         return None;
     }
-    Some(&value[prefix.len()..])
+    value.get(prefix.len()..)
 }
 
 /// Build a human-readable source label for a chunk.
@@ -230,6 +239,30 @@ mod tests {
     #[test]
     fn does_not_promote_question_without_answer() {
         assert!(prepared_qa_question("Question: What is your approach to AI?").is_none());
+    }
+
+    #[test]
+    fn prepared_qa_parser_is_safe_for_unicode_leading_lines() {
+        let text = "💡 Résumé context before the prepared answer\nQuestion: How have you used RAG?\nAnswer: I built a source-code retrieval workflow.";
+        assert_eq!(
+            prepared_qa_question(text).as_deref(),
+            Some("How have you used RAG?")
+        );
+    }
+
+    #[test]
+    fn transcript_q_and_a_is_not_promoted_as_prepared_content() {
+        let chunks = vec![make_chunk(
+            "transcript",
+            "transcript_abc",
+            7,
+            "Question: Tell me about your architecture experience.\nAnswer: I discussed Snowflake and dbt.",
+        )];
+
+        let result = build_rag_context(&chunks, "");
+        assert!(!result.contains("## Prepared Interview Q&A"));
+        assert!(result.contains("## Relevant Context (Retrieved via RAG)"));
+        assert!(result.contains("[Source 1: Live Transcript, segment 7]"));
     }
 
     #[test]
