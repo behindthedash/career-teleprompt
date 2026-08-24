@@ -7,6 +7,7 @@ import { useStreamStore } from "../stores/streamStore";
 import type { DetectedQuestion } from "../lib/types";
 
 type QuestionRequestState = "idle" | "queued" | "requested";
+type QuestionRequestOrigin = "auto" | "manual";
 
 interface TrackedQuestion extends DetectedQuestion {
   requestState: QuestionRequestState;
@@ -19,6 +20,7 @@ function sameQuestion(a: DetectedQuestion | null, b: DetectedQuestion): boolean 
 export function QuestionDetector() {
   const [questions, setQuestions] = useState<TrackedQuestion[]>([]);
   const queuedQuestionRef = useRef<DetectedQuestion | null>(null);
+  const queuedOriginRef = useRef<QuestionRequestOrigin | null>(null);
   const isStreaming = useStreamStore((state) => state.isStreaming);
   const autoTrigger = useConfigStore((state) => state.autoTrigger);
 
@@ -40,26 +42,28 @@ export function QuestionDetector() {
   }, []);
 
   const queueLatestQuestion = useCallback(
-    (q: DetectedQuestion) => {
+    (q: DetectedQuestion, origin: QuestionRequestOrigin) => {
       const previousQueued = queuedQuestionRef.current;
       if (previousQueued && !sameQuestion(previousQueued, q)) {
         setRequestState(previousQueued, "idle");
       }
       queuedQuestionRef.current = q;
+      queuedOriginRef.current = origin;
       setRequestState(q, "queued");
     },
     [setRequestState],
   );
 
   const requestWhatToSay = useCallback(
-    (q: DetectedQuestion) => {
+    (q: DetectedQuestion, origin: QuestionRequestOrigin) => {
       if (useStreamStore.getState().isStreaming) {
-        queueLatestQuestion(q);
+        queueLatestQuestion(q, origin);
         return "queued" as const;
       }
 
       if (sameQuestion(queuedQuestionRef.current, q)) {
         queuedQuestionRef.current = null;
+        queuedOriginRef.current = null;
       }
       setRequestState(q, "requested");
       generateAssist("WhatToSay", q.text).catch(() => setRequestState(q, "idle"));
@@ -75,18 +79,21 @@ export function QuestionDetector() {
     const queued = queuedQuestionRef.current;
     if (!queued) return;
 
+    const origin = queuedOriginRef.current ?? "auto";
     queuedQuestionRef.current = null;
-    requestWhatToSay(queued);
+    queuedOriginRef.current = null;
+    requestWhatToSay(queued, origin);
   }, [isStreaming, requestWhatToSay]);
 
-  // Respect a live settings change: disabling auto-trigger must not leave an
-  // automatically queued question waiting to fire after the current stream.
+  // A live settings change may cancel an automatically queued request, but it
+  // must never erase an explicit manual request the user made while streaming.
   useEffect(() => {
-    if (autoTrigger) return;
+    if (autoTrigger || queuedOriginRef.current !== "auto") return;
     const queued = queuedQuestionRef.current;
     if (!queued) return;
 
     queuedQuestionRef.current = null;
+    queuedOriginRef.current = null;
     setRequestState(queued, "idle");
   }, [autoTrigger, setRequestState]);
 
@@ -99,7 +106,7 @@ export function QuestionDetector() {
       addQuestion(event);
 
       if (useConfigStore.getState().autoTrigger) {
-        requestWhatToSay(event);
+        requestWhatToSay(event, "auto");
       }
     });
     return () => {
@@ -111,7 +118,7 @@ export function QuestionDetector() {
     (index: number) => {
       const question = questions[index];
       if (!question || question.requestState !== "idle") return;
-      requestWhatToSay(question);
+      requestWhatToSay(question, "manual");
     },
     [questions, requestWhatToSay],
   );
@@ -121,12 +128,16 @@ export function QuestionDetector() {
     const target = questions[index];
     if (target && sameQuestion(queuedQuestionRef.current, target)) {
       queuedQuestionRef.current = null;
+      queuedOriginRef.current = null;
     }
     setQuestions((prev) => prev.filter((_, i) => i !== index));
   }, [questions]);
 
   const latest = questions.length > 0 ? questions[0] : null;
   const previousQuestions = questions.slice(1, 4);
+
+  const requestLabel = (state: QuestionRequestState) =>
+    state === "queued" ? "Queued" : state === "requested" ? "Requested" : "What to Say";
 
   return (
     <div className="flex flex-col gap-2.5" role="region" aria-label="Detected questions">
@@ -191,11 +202,11 @@ export function QuestionDetector() {
               }`}
             >
               {latest.requestState === "requested" ? (
-                <><Check className="h-3.5 w-3.5" aria-hidden="true" />Requested</>
+                <><Check className="h-3.5 w-3.5" aria-hidden="true" />{requestLabel(latest.requestState)}</>
               ) : latest.requestState === "queued" ? (
-                <><Clock className="h-3.5 w-3.5" aria-hidden="true" />Queued</>
+                <><Clock className="h-3.5 w-3.5" aria-hidden="true" />{requestLabel(latest.requestState)}</>
               ) : (
-                <><Sparkles className="h-3.5 w-3.5" aria-hidden="true" />What to Say</>
+                <><Sparkles className="h-3.5 w-3.5" aria-hidden="true" />{requestLabel(latest.requestState)}</>
               )}
             </button>
             <button
@@ -237,10 +248,6 @@ export function QuestionDetector() {
                   {q.requestState === "requested" ? (
                     <div className="flex h-4 w-4 items-center justify-center rounded-full bg-success/20">
                       <Check className="h-2.5 w-2.5 text-success" />
-                    </div>
-                  ) : q.requestState === "queued" ? (
-                    <div className="flex h-4 w-4 items-center justify-center rounded-full bg-muted/30">
-                      <Clock className="h-2.5 w-2.5 text-muted-foreground/60" />
                     </div>
                   ) : (
                     <div className="flex h-4 w-4 items-center justify-center rounded-full bg-muted/30">
