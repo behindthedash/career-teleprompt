@@ -161,10 +161,11 @@ function searchCandidateWindows(
         expectedWindow,
         expectedTokens,
       );
-      let score = Math.min(
-        1,
-        sequenceScore(spokenTokens, expectedWindow) + anchorBoost,
-      );
+      const baseScore = sequenceScore(spokenTokens, expectedWindow);
+      // Fill only part of the remaining confidence gap. This lets a distinctive phrase
+      // strengthen an ambiguous candidate without saturating a weaker/shorter window to
+      // the same score as a true exact match.
+      let score = baseScore + anchorBoost * (1 - baseScore);
 
       // Prefer the closest plausible continuation when a common phrase appears more than once.
       const expectedAdvance = Math.max(1, spokenTokens.length);
