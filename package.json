@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "npm run test:teleprompter",
-    "test:teleprompter": "tsc -p tsconfig.teleprompter-test.json && node tests/teleprompter-content.test.mjs && node tests/teleprompter-follower.test.mjs && node tests/teleprompter-display.test.mjs && node tests/teleprompter-handoff.test.mjs && node tests/teleprompter-lifecycle.test.mjs && node tests/grounded-what-to-say.test.mjs && node tests/interview-answer-history.test.mjs && node tests/prepared-qa-retrieval.test.mjs && node tests/interview-auto-what-to-say.test.mjs && node tests/teleprompter-auto-first-answer.test.mjs && node tests/teleprompter-completion.test.mjs && node tests/interview-latest-question-wins.test.mjs && node -e \"require('fs').rmSync('.tmp-teleprompter-tests',{recursive:true,force:true})\"",
+    "test:teleprompter": "tsc -p tsconfig.teleprompter-test.json && node tests/teleprompter-content.test.mjs && node tests/teleprompter-follower.test.mjs && node tests/teleprompter-display.test.mjs && node tests/teleprompter-handoff.test.mjs && node tests/teleprompter-lifecycle.test.mjs && node tests/grounded-what-to-say.test.mjs && node tests/interview-answer-history.test.mjs && node tests/prepared-qa-retrieval.test.mjs && node tests/interview-auto-what-to-say.test.mjs && node tests/teleprompter-auto-first-answer.test.mjs && node tests/teleprompter-completion.test.mjs && node tests/interview-latest-question-wins.test.mjs && node tests/teleprompter-preferences.test.mjs && node -e \"require('fs').rmSync('.tmp-teleprompter-tests',{recursive:true,force:true})\"",
     "preview": "vite preview",
     "tauri": "tauri",
     "release": "node scripts/release.js",
@@ -34,7 +34,7 @@
     "react-syntax-highlighter": "^15.5.0",
     "remark-gfm": "^4.0.0",
     "tailwind-merge": "^2.3.0",
-    "tailwindcss-animate": "^1.0.7",
+    "tailwindcss": "^3.4.0",
     "zustand": "^4.5.0"
   },
   "devDependencies": {
