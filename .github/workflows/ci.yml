@@ -38,6 +38,10 @@ jobs:
       - name: Frontend production build
         run: npm run build
 
+      - name: Interview question assembly tests
+        run: cargo test question_detector --lib
+        working-directory: src-tauri
+
       - name: Rust check
         run: cargo check
         working-directory: src-tauri

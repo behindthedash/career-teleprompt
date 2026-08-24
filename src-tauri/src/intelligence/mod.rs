@@ -255,9 +255,10 @@ impl IntelligenceEngine {
     }
 
     /// Reset per-meeting state so the next meeting starts clean.
-    /// Clears the transcript buffer and last detected question.
+    /// Clears transcript, question assembly/deduplication, and the last detected question.
     pub fn clear_session(&mut self) {
         self.transcript_buffer.clear();
+        self.question_detector.reset();
         self.last_detected_question = None;
         self.cancel_requested.store(false, std::sync::atomic::Ordering::SeqCst);
         self.is_generating.store(false, std::sync::atomic::Ordering::SeqCst);
