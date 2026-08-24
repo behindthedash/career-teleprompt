@@ -6,7 +6,6 @@ import {
   FileText,
   CheckCircle,
   Volume2,
-  Globe,
 } from "lucide-react";
 import { useConfigStore } from "../../stores/configStore";
 
@@ -91,7 +90,12 @@ export function ReadyStep({
               Keyboard Shortcuts
             </p>
           </div>
-          <div className="max-h-52 overflow-y-auto p-1.5">
+          <div
+            className="max-h-52 overflow-y-auto p-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50"
+            role="region"
+            aria-label="Keyboard shortcuts reference"
+            tabIndex={0}
+          >
             <table className="w-full">
               <tbody>
                 {SHORTCUTS.map((s) => (
