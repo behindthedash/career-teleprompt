@@ -1,8 +1,7 @@
 import { useCallback } from "react";
 import { useConfigStore } from "../stores/configStore";
-import { FolderOpen, Sun, Moon, Monitor } from "lucide-react";
+import { FolderOpen, Sun, Moon, Monitor, Eye } from "lucide-react";
 import type { ThemeMode } from "../lib/types";
-import { Eye } from "lucide-react";
 
 export function GeneralSettings() {
   const theme = useConfigStore((s) => s.theme);
@@ -141,7 +140,9 @@ export function GeneralSettings() {
           <div className="flex items-center gap-2">
             <Eye className="h-3.5 w-3.5 text-muted-foreground" />
             <div>
-              <label className="text-sm font-medium text-foreground">Overlay Transparency</label>
+              <label htmlFor="overlay-transparency" className="text-sm font-medium text-foreground">
+                Overlay Transparency
+              </label>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 How transparent the overlay background is
               </p>
@@ -152,12 +153,14 @@ export function GeneralSettings() {
           </span>
         </div>
         <input
+          id="overlay-transparency"
           type="range"
           min={0.1}
           max={1}
           step={0.01}
           value={overlayOpacity}
           onChange={(e) => setOverlayOpacity(parseFloat(e.target.value))}
+          aria-valuetext={`${Math.round(overlayOpacity * 100)} percent`}
           className="w-full h-1.5 rounded-full appearance-none bg-secondary cursor-pointer accent-primary"
         />
         <div className="flex justify-between mt-1">
