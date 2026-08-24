@@ -28,7 +28,7 @@ async function askKnowledgeBase(page, query) {
   await page.getByRole("button", { name: "Ask", exact: true }).click();
 }
 
-async function startInterview(page) {
+async function startInterview(page, { waitForOverlay = true } = {}) {
   await page.getByRole("button", { name: /^Start Meeting\b/ }).first().click();
   const dialog = page.getByRole("dialog", { name: "Meeting setup" });
   await dialog.waitFor();
@@ -36,7 +36,9 @@ async function startInterview(page) {
   await dialog.getByRole("button", { name: /^Team Meeting\b/ }).first().click();
   await dialog.getByRole("button", { name: /^Interview\b/ }).last().click();
   await dialog.getByRole("button", { name: "Start Meeting", exact: true }).click();
-  await page.waitForFunction(() => window.__CAREER_TELEPROMPT_WORKFLOW__?.state().view === "overlay");
+  if (waitForOverlay) {
+    await page.waitForFunction(() => window.__CAREER_TELEPROMPT_WORKFLOW__?.state().view === "overlay");
+  }
 }
 
 async function runScenario(name, failure, body) {
@@ -92,18 +94,27 @@ try {
 
   await runScenario("capture-error", "capture-error", async (page) => {
     await page.getByRole("heading", { name: "Career Teleprompt" }).waitFor();
-    await startInterview(page);
-    await page.getByText("CI Interview", { exact: true }).first().waitFor();
-    const state = await page.evaluate(() => window.__CAREER_TELEPROMPT_WORKFLOW__?.state());
-    if (state?.activeMeetingId !== "workflow-meeting-001") {
-      throw new Error("meeting did not remain active after capture failure");
-    }
+    await startInterview(page, { waitForOverlay: false });
+
+    // Capture startup is a required interview dependency. A failure must abort
+    // the just-created meeting, keep the user on the launcher, and surface the
+    // error instead of entering an apparently-active overlay.
+    await page
+      .getByText(/Audio\/transcription failed to start: Synthetic audio device unavailable/i)
+      .first()
+      .waitFor();
+    await page.waitForFunction(() => {
+      const state = window.__CAREER_TELEPROMPT_WORKFLOW__?.state();
+      return state?.view === "launcher" && state.activeMeetingId === null;
+    });
+
     const calls = await page.evaluate(() => window.__CAREER_TELEPROMPT_WORKFLOW__?.commandCalls() ?? []);
     if (!calls.some((call) => call.command === "start_capture_per_party")) {
       throw new Error("capture failure path was not exercised");
     }
-    await page.getByRole("button", { name: "End meeting", exact: true }).click();
-    await page.getByRole("heading", { name: "Career Teleprompt" }).waitFor();
+    if (!calls.some((call) => call.command === "end_meeting")) {
+      throw new Error("failed meeting was not rolled back");
+    }
   });
 } catch (caught) {
   failure = caught instanceof Error ? caught : new Error(String(caught));
