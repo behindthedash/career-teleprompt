@@ -3,6 +3,12 @@ name: Windows Installer
 on:
   push:
     branches: [dev]
+  pull_request:
+    branches: [dev]
+    paths:
+      - ".github/workflows/windows-installer.yml"
+      - "src-tauri/tauri.installer.conf.json"
+      - "src-tauri/tauri.conf.json"
   workflow_dispatch:
 
 permissions:
