@@ -23,10 +23,6 @@ pub fn build_rag_context(chunks: &[ScoredChunk], custom_instructions: &str) -> S
         return parts.join("\n");
     }
 
-    // Prepared Q&A is an authored reference-document concept, not a transcript concept.
-    // A transcript can legitimately contain the words "Question:" / "Answer:" and must
-    // never be upgraded into user-authored prepared interview wording just because it
-    // happens to match the textual structure.
     let (prepared, general): (Vec<&ScoredChunk>, Vec<&ScoredChunk>) = chunks
         .iter()
         .partition(|chunk| {
@@ -61,6 +57,84 @@ pub fn build_rag_context(chunks: &[ScoredChunk], custom_instructions: &str) -> S
                 "[Source {}: {}]\n{}\n---",
                 i + 1,
                 source_label,
+                chunk.text
+            ));
+        }
+    }
+
+    parts.join("\n")
+}
+
+/// Build RAG context specifically for live interview answers.
+///
+/// This keeps three evidence classes explicit:
+/// - prepared Q&A authored by the user,
+/// - evidence retrieved from user-loaded files,
+/// - transcript-derived recall used only for conversational continuity.
+///
+/// Transcript recall is intentionally not presented as evidence of experience.
+pub fn build_interview_rag_context(chunks: &[ScoredChunk]) -> String {
+    let mut parts: Vec<String> = Vec::new();
+
+    let prepared: Vec<&ScoredChunk> = chunks
+        .iter()
+        .filter(|chunk| {
+            chunk.source_type != "transcript" && prepared_qa_question(&chunk.text).is_some()
+        })
+        .collect();
+    let file_evidence: Vec<&ScoredChunk> = chunks
+        .iter()
+        .filter(|chunk| {
+            chunk.source_type != "transcript" && prepared_qa_question(&chunk.text).is_none()
+        })
+        .collect();
+    let transcript_recall: Vec<&ScoredChunk> = chunks
+        .iter()
+        .filter(|chunk| chunk.source_type == "transcript")
+        .collect();
+
+    if !prepared.is_empty() {
+        parts.push(
+            "## Prepared Interview Q&A\nThese are user-authored prepared answers. Prefer a directly relevant prepared answer, while preserving any stated limitations, prototype status, or scope."
+                .to_string(),
+        );
+        for (i, chunk) in prepared.iter().enumerate() {
+            let prepared_question = prepared_qa_question(&chunk.text).unwrap_or_default();
+            parts.push(format!(
+                "[Prepared Q&A {}: {}]\nPrepared question: {}\n{}\n---",
+                i + 1,
+                build_source_label(chunk),
+                prepared_question,
+                chunk.text
+            ));
+        }
+    }
+
+    if !file_evidence.is_empty() {
+        parts.push(
+            "## Evidence From Your Files\nUse these user-loaded materials as supporting evidence. Preserve the source wording and do not upgrade conceptual, proposed, prototype, or planned work into production experience."
+                .to_string(),
+        );
+        for (i, chunk) in file_evidence.iter().enumerate() {
+            parts.push(format!(
+                "[Evidence {}: {}]\n{}\n---",
+                i + 1,
+                build_source_label(chunk),
+                chunk.text
+            ));
+        }
+    }
+
+    if !transcript_recall.is_empty() {
+        parts.push(
+            "## Conversation Recall (Not Evidence of Experience)\nUse these transcript-derived snippets only to maintain continuity with what was already said in this interview. Never treat them as independent proof that the user has an experience, project, metric, technology, or outcome."
+                .to_string(),
+        );
+        for (i, chunk) in transcript_recall.iter().enumerate() {
+            parts.push(format!(
+                "[Conversation Recall {}: {}]\n{}\n---",
+                i + 1,
+                build_source_label(chunk),
                 chunk.text
             ));
         }
@@ -134,8 +208,6 @@ pub fn prepared_qa_question(text: &str) -> Option<String> {
 }
 
 fn strip_prefix_case_insensitive<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
-    // Rust strings are UTF-8. Never slice at a byte offset until `get` has verified
-    // that the prefix boundary is also a valid character boundary.
     let candidate = value.get(..prefix.len())?;
     if !candidate.eq_ignore_ascii_case(prefix) {
         return None;
@@ -143,10 +215,6 @@ fn strip_prefix_case_insensitive<'a>(value: &'a str, prefix: &str) -> Option<&'a
     value.get(prefix.len()..)
 }
 
-/// Build a human-readable source label for a chunk.
-///
-/// - For transcript chunks: "Live Transcript, segment N"
-/// - For file chunks: "filename, chunk N"
 fn build_source_label(chunk: &ScoredChunk) -> String {
     if chunk.source_type == "transcript" {
         format!("Live Transcript, segment {}", chunk.chunk_index)
@@ -282,5 +350,32 @@ mod tests {
         let generic_pos = result.find("## Relevant Context").unwrap();
         assert!(prepared_pos < generic_pos);
         assert!(result.contains("Prepared question: Tell me about a difficult data problem."));
+    }
+
+    #[test]
+    fn interview_context_separates_file_evidence_from_transcript_recall() {
+        let chunks = vec![
+            make_chunk("file", "resume.pdf", 0, "Implemented Snowflake pipelines"),
+            make_chunk("transcript", "transcript_abc", 4, "You: I mentioned Snowflake earlier"),
+        ];
+
+        let result = build_interview_rag_context(&chunks);
+        assert!(result.contains("## Evidence From Your Files"));
+        assert!(result.contains("## Conversation Recall (Not Evidence of Experience)"));
+        assert!(result.contains("Never treat them as independent proof"));
+    }
+
+    #[test]
+    fn interview_context_keeps_transcript_q_and_a_out_of_prepared_section() {
+        let chunks = vec![make_chunk(
+            "transcript",
+            "transcript_abc",
+            8,
+            "Question: Tell me about RAG.\nAnswer: I discussed a retrieval workflow.",
+        )];
+
+        let result = build_interview_rag_context(&chunks);
+        assert!(!result.contains("## Prepared Interview Q&A"));
+        assert!(result.contains("## Conversation Recall (Not Evidence of Experience)"));
     }
 }

@@ -46,6 +46,10 @@ jobs:
         run: cargo test prompt_builder --lib
         working-directory: src-tauri
 
+      - name: Interview evidence reranker tests
+        run: cargo test interview_rerank --lib
+        working-directory: src-tauri
+
       - name: Rust check
         run: cargo check
         working-directory: src-tauri

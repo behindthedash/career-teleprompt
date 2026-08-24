@@ -5,6 +5,7 @@ pub mod vector_store;
 pub mod fts_store;
 pub mod search;
 pub mod prompt_builder;
+pub mod interview_rerank;
 pub mod file_processor;
 pub mod transcript_indexer;
 
