@@ -1,0 +1,65 @@
+name: Resilience E2E
+
+on:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  resilience:
+    name: RAG, LLM and capture failure recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Install Playwright tooling
+        run: npm install --no-save --package-lock=false playwright@1.55.0
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start E2E application server
+        shell: bash
+        run: |
+          CAREER_TELEPROMPT_E2E=1 npm run dev -- --host 127.0.0.1 --port 4174 > /tmp/career-teleprompt-resilience-vite.log 2>&1 &
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:4174/workflow-review.html > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/career-teleprompt-resilience-vite.log
+          exit 1
+
+      - name: Run resilience Playwright scenarios
+        run: node scripts/resilience-e2e.mjs --base-url=http://127.0.0.1:4174
+
+      - name: Surface application server log on failure
+        if: failure()
+        run: cat /tmp/career-teleprompt-resilience-vite.log || true
+
+      - name: Upload resilience screenshots, report and trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: career-teleprompt-resilience-e2e
+          path: artifacts/resilience-e2e
+          if-no-files-found: warn
+          retention-days: 30

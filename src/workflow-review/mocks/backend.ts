@@ -9,11 +9,16 @@ const listeners = new Map<string, Set<EventHandler>>();
 const commandCalls: CommandCall[] = [];
 let eventId = 0;
 
+const failureMode = new URLSearchParams(globalThis.location?.search ?? "").get("failure");
+
 const workflowAnswer =
   "I would design the pipeline around durable event streams, idempotent consumers, explicit backpressure controls, and observable recovery paths.";
 
 const ragAnswer =
   "The candidate built agentic retrieval workflows with evaluation, grounded context, and explicit human approval gates.";
+
+const noMatchAnswer =
+  "I could not find grounded knowledge-base evidence for that question, so I would ask for more context rather than invent an answer.";
 
 const resource = {
   id: "workflow-resume",
@@ -89,7 +94,7 @@ async function streamAnswer(
     rag_query: options.query ?? "pipeline architecture experience",
     rag_chunks: options.includeRag === false ? [] : ragResults,
     rag_chunks_filtered: 0,
-    rag_total_candidates: ragResults.length,
+    rag_total_candidates: options.includeRag === false ? 0 : ragResults.length,
     transcript_window_seconds: 120,
     transcript_segments_count: options.transcriptCount ?? 0,
     transcript_segments_total: options.transcriptCount ?? 0,
@@ -148,10 +153,22 @@ export async function invoke<T>(
       }) as T;
     case "test_rag_search":
       await sleep(25);
-      return JSON.stringify(ragResults) as T;
+      if (failureMode === "rag-error") {
+        throw new Error("Synthetic RAG search failure");
+      }
+      return JSON.stringify(failureMode === "rag-empty" ? [] : ragResults) as T;
     case "test_rag_answer": {
       const query = String(args?.query ?? "knowledge base question");
-      await streamAnswer("AskQuestion", ragAnswer, { query, includeRag: true });
+      if (failureMode === "llm-error") {
+        await sleep(35);
+        emit("llm_stream_error", "Synthetic LLM timeout");
+        return undefined as T;
+      }
+      const empty = failureMode === "rag-empty";
+      await streamAnswer("AskQuestion", empty ? noMatchAnswer : ragAnswer, {
+        query,
+        includeRag: !empty,
+      });
       return undefined as T;
     }
     case "start_meeting":
@@ -168,6 +185,11 @@ export async function invoke<T>(
         audio_mode: "online",
         ai_scenario: "interview",
       }) as T;
+    case "start_capture_per_party":
+      if (failureMode === "capture-error") {
+        throw new Error("Synthetic audio device unavailable");
+      }
+      return undefined as T;
     case "generate_assist": {
       const rawSegments = String(args?.transcriptSegments ?? "[]");
       let transcriptCount = 0;
@@ -175,6 +197,11 @@ export async function invoke<T>(
         transcriptCount = JSON.parse(rawSegments).length;
       } catch {
         transcriptCount = 0;
+      }
+      if (failureMode === "llm-error") {
+        await sleep(35);
+        emit("llm_stream_error", "Synthetic LLM timeout");
+        return undefined as T;
       }
       await streamAnswer(String(args?.mode ?? "WhatToSay"), workflowAnswer, {
         includeRag: true,
@@ -211,5 +238,6 @@ export function resetBackend(): void {
 export const workflowFixtures = {
   workflowAnswer,
   ragAnswer,
+  noMatchAnswer,
   ragResults,
 };
