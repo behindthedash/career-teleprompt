@@ -19,8 +19,10 @@ function sameQuestion(a: DetectedQuestion | null, b: DetectedQuestion): boolean 
 
 export function QuestionDetector() {
   const [questions, setQuestions] = useState<TrackedQuestion[]>([]);
+  const [requestInFlight, setRequestInFlight] = useState(false);
   const queuedQuestionRef = useRef<DetectedQuestion | null>(null);
   const queuedOriginRef = useRef<QuestionRequestOrigin | null>(null);
+  const requestInFlightRef = useRef(false);
   const isStreaming = useStreamStore((state) => state.isStreaming);
   const autoTrigger = useConfigStore((state) => state.autoTrigger);
 
@@ -57,7 +59,10 @@ export function QuestionDetector() {
 
   const requestWhatToSay = useCallback(
     (q: DetectedQuestion, origin: QuestionRequestOrigin) => {
-      if (useStreamStore.getState().isStreaming) {
+      // isStreaming is event-driven and does not cover the tiny windows before
+      // stream_start or after stream_end while the Rust command is still active.
+      // The invoke promise does: it settles only after generate_assist returns.
+      if (useStreamStore.getState().isStreaming || requestInFlightRef.current) {
         queueLatestQuestion(q, origin);
         return "queued" as const;
       }
@@ -66,17 +71,26 @@ export function QuestionDetector() {
         queuedQuestionRef.current = null;
         queuedOriginRef.current = null;
       }
+
+      requestInFlightRef.current = true;
+      setRequestInFlight(true);
       setRequestState(q, "requested");
-      generateAssist("WhatToSay", q.text).catch(() => setRequestState(q, "idle"));
+      generateAssist("WhatToSay", q.text)
+        .catch(() => setRequestState(q, "idle"))
+        .finally(() => {
+          requestInFlightRef.current = false;
+          setRequestInFlight(false);
+        });
       return "requested" as const;
     },
     [queueLatestQuestion, setRequestState],
   );
 
   // A question detected while another answer is generating is never dropped.
-  // Once the current stream finishes, generate only the newest queued question.
+  // Drain only after both the visible stream and the underlying generate_assist
+  // command have finished, then generate only the newest queued question.
   useEffect(() => {
-    if (isStreaming) return;
+    if (isStreaming || requestInFlight) return;
     const queued = queuedQuestionRef.current;
     if (!queued) return;
 
@@ -84,7 +98,7 @@ export function QuestionDetector() {
     queuedQuestionRef.current = null;
     queuedOriginRef.current = null;
     requestWhatToSay(queued, origin);
-  }, [isStreaming, requestWhatToSay]);
+  }, [isStreaming, requestInFlight, requestWhatToSay]);
 
   // A live settings change may cancel an automatically queued request, but it
   // must never erase an explicit manual request the user made while streaming.
