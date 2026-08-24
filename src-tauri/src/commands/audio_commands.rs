@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use tauri::{command, AppHandle, Emitter, Manager};
@@ -302,7 +302,9 @@ pub async fn start_capture(
 
         // Clean shutdown
         if let Some(ref mut provider) = system_stt_provider {
-            let _ = provider.stop_stream().await;
+            if let Err(e) = provider.stop_stream().await {
+                log::warn!("Failed to stop system STT provider cleanly: {}", e);
+            }
         }
         log::info!("Audio processing task exiting");
     });
@@ -690,20 +692,28 @@ fn activate_input_peak_meters() -> Vec<InputPeakActivator> {
 /// Dedicated monitor thread: initializes COM once, reads all peak levels at ~60 fps,
 /// and emits a `device_levels` Tauri event after each read.
 /// Opens capture streams on input devices to activate their peak meters.
-/// Exits when `stop` flips to false.
+/// A worker exits when monitoring is disabled OR a newer generation supersedes it.
 #[cfg(target_os = "windows")]
-fn run_device_monitor_loop(app: tauri::AppHandle, stop: Arc<AtomicBool>) {
+fn run_device_monitor_loop(
+    app: tauri::AppHandle,
+    running: Arc<AtomicBool>,
+    generations: Arc<AtomicU64>,
+    my_generation: u64,
+) {
     use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
     unsafe {
         let hr = CoInitializeEx(None, COINIT_MULTITHREADED);
         if hr.is_err() && hr.0 != 1 {
+            log::warn!("Device monitor COM initialization failed: {:?}", hr);
             return;
         }
 
         // Open capture streams on input devices to enable peak metering
         let input_activators = activate_input_peak_meters();
 
-        while stop.load(Ordering::SeqCst) {
+        while running.load(Ordering::SeqCst)
+            && generations.load(Ordering::SeqCst) == my_generation
+        {
             // Drain capture buffers to prevent overflow
             for a in &input_activators {
                 a.drain();
@@ -726,28 +736,29 @@ fn run_device_monitor_loop(app: tauri::AppHandle, stop: Arc<AtomicBool>) {
 }
 
 /// Start the Live Monitor background thread.
-/// Idempotent — stops any running monitor first, waits for it to exit, then starts fresh.
+/// Idempotent — each start claims a new generation, which deterministically
+/// invalidates every previous monitor without depending on a timing sleep.
 #[command]
 pub async fn start_device_monitor(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         let state = app.state::<crate::state::AppState>();
-
-        // Signal any existing thread to stop
-        state.device_monitor_running.store(false, Ordering::SeqCst);
-        // Wait long enough for the old thread to see the flag (loop sleeps 16ms)
-        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
-
-        // Start fresh
+        let generation = state
+            .device_monitor_generation
+            .fetch_add(1, Ordering::SeqCst)
+            .wrapping_add(1);
         state.device_monitor_running.store(true, Ordering::SeqCst);
-        let stop_flag = Arc::clone(&state.device_monitor_running);
+
+        let running = Arc::clone(&state.device_monitor_running);
+        let generations = Arc::clone(&state.device_monitor_generation);
         let app_clone = app.clone();
-        std::thread::spawn(move || {
-            run_device_monitor_loop(app_clone, stop_flag);
-            // Don't reset the flag here — only start/stop commands manage it.
-            // This prevents a race where an exiting thread resets the flag
-            // after a new thread has already been started.
-        });
+        std::thread::Builder::new()
+            .name(format!("audio-device-monitor-{}", generation))
+            .spawn(move || run_device_monitor_loop(app_clone, running, generations, generation))
+            .map_err(|e| {
+                state.device_monitor_running.store(false, Ordering::SeqCst);
+                format!("Failed to start audio device monitor: {}", e)
+            })?;
     }
     Ok(())
 }
@@ -759,6 +770,7 @@ pub async fn stop_device_monitor(app: tauri::AppHandle) -> Result<(), String> {
     {
         let state = app.state::<crate::state::AppState>();
         state.device_monitor_running.store(false, Ordering::SeqCst);
+        state.device_monitor_generation.fetch_add(1, Ordering::SeqCst);
     }
     Ok(())
 }
@@ -770,6 +782,17 @@ pub async fn get_audio_sessions() -> Result<String, String> {
     let sessions = session_monitor::enumerate_audio_sessions()?;
     serde_json::to_string(&sessions)
         .map_err(|e| format!("Failed to serialize audio sessions: {}", e))
+}
+
+/// Stop physical capture and restore any temporary OS-default override after a
+/// failed per-party startup. This is intentionally safe to call repeatedly.
+fn rollback_party_capture_start(state: &AppState, app: &AppHandle) {
+    if let Ok(mut guard) = state.audio.lock() {
+        if let Some(ref mut mgr) = *guard {
+            mgr.stop_capture();
+        }
+    }
+    restore_default_device_if_overridden(state, app);
 }
 
 /// Start per-party audio capture with independent STT pipelines.
@@ -868,10 +891,17 @@ pub async fn start_capture_per_party(
 
             match crate::audio::device_default::override_default_capture_device(target_device) {
                 Ok(Some(original)) => {
-                    // Store original so we can restore it on stop
-                    if let Ok(mut guard) = state.original_default_device.lock() {
-                        *guard = Some(original.clone());
+                    // If the override succeeded we MUST retain the original endpoint.
+                    // A poisoned state lock would otherwise leave Windows modified with
+                    // no recovery route, so restore immediately and fail closed.
+                    match state.original_default_device.lock() {
+                        Ok(mut guard) => *guard = Some(original.clone()),
+                        Err(_) => {
+                            let _ = crate::audio::device_default::restore_default_capture_device(&original);
+                            return Err("IPolicyConfig override applied but recovery state could not be stored".to_string());
+                        }
                     }
+
                     // Also store the resolved target endpoint for ensure_ipolicy_override
                     match crate::audio::device_default::find_capture_endpoint_id_by_name(target_device) {
                         Ok(target_ep) => {
@@ -906,18 +936,19 @@ pub async fn start_capture_per_party(
                     crate::stt::emit_stt_debug(&app, "info", "audio",
                         "IPolicyConfig: selected device is already the default — no override needed");
                     // Still store the target endpoint — it IS the current default
-                    match crate::audio::device_default::get_default_capture_endpoint_id() {
-                        Ok(ep) => {
-                            if let Ok(mut guard) = state.ipolicy_target_endpoint.lock() {
-                                *guard = Some(ep);
-                            }
+                    if let Ok(ep) = crate::audio::device_default::get_default_capture_endpoint_id() {
+                        if let Ok(mut guard) = state.ipolicy_target_endpoint.lock() {
+                            *guard = Some(ep);
                         }
-                        Err(_) => {}
                     }
                 }
                 Err(e) => {
-                    crate::stt::emit_stt_debug(&app, "warn", "audio",
-                        &format!("IPolicyConfig: override failed ({}). STT will use OS default mic.", e));
+                    crate::stt::emit_stt_debug(&app, "error", "audio",
+                        &format!("IPolicyConfig: override failed: {}", e));
+                    return Err(format!(
+                        "Could not select the requested microphone for {}: {}",
+                        target_device, e
+                    ));
                 }
             }
         } else {
@@ -925,15 +956,13 @@ pub async fn start_capture_per_party(
                 "IPolicyConfig: no override needed (neither party uses web_speech/windows_native with non-default input)");
         }
 
-        // Emit IPolicyConfig status event for frontend synchronization
-        let override_applied = needs_override(&you, "You") || needs_override(&them, "Them");
         let _ = app.emit("ipolicy_status", serde_json::json!({
-            "applied": override_applied,
+            "applied": state.original_default_device.lock().ok().and_then(|g| g.clone()).is_some(),
             "target_device": if needs_override(&you, "You") { &you.device_id } else { &them.device_id },
         }));
     }
 
-    {
+    let capture_result = {
         let mut guard = state
             .audio
             .lock()
@@ -943,70 +972,85 @@ pub async fn start_capture_per_party(
             "AudioCaptureManager::start_capture mic='{}', system='{}'",
             mic_device, system_device
         );
-        mgr.start_capture(&mic_device, &system_device, system_is_input, tx)?;
+        mgr.start_capture(&mic_device, &system_device, system_is_input, tx)
+    };
+    if let Err(e) = capture_result {
+        restore_default_device_if_overridden(&state, &app);
+        return Err(e);
     }
 
-    // ── Create STT provider for "You" party (if not web_speech) ──
-    let you_stt = create_stt_provider_for_party(&you, &state, &app, "You").await?;
-
-    // ── Create STT provider for "Them" party (if not web_speech) ──
-    let them_stt = create_stt_provider_for_party(&them, &state, &app, "Them").await?;
+    // ── Create STT providers. Any configured backend provider is required to
+    // materialize successfully; only Web Speech intentionally returns None.
+    let you_stt = match create_stt_provider_for_party(&you, &state, &app, "You").await {
+        Ok(provider) => provider,
+        Err(e) => {
+            rollback_party_capture_start(&state, &app);
+            return Err(format!("Could not initialize 'You' transcription: {}", e));
+        }
+    };
+    let them_stt = match create_stt_provider_for_party(&them, &state, &app, "Them").await {
+        Ok(provider) => provider,
+        Err(e) => {
+            rollback_party_capture_start(&state, &app);
+            return Err(format!("Could not initialize interviewer transcription: {}", e));
+        }
+    };
 
     // Start STT streams
     let (you_stt_tx, mut you_stt_rx) =
         mpsc::channel::<crate::stt::provider::TranscriptResult>(256);
     let (them_stt_tx, mut them_stt_rx) =
         mpsc::channel::<crate::stt::provider::TranscriptResult>(256);
-
     let mut you_stt_provider = you_stt;
     let mut them_stt_provider = them_stt;
 
     if let Some(ref mut provider) = you_stt_provider {
         crate::stt::emit_stt_debug(&app, "info", "stt",
             &format!("Starting 'You' STT ({})", you.stt_provider));
-        match provider.start_stream(you_stt_tx).await {
-            Ok(()) => {
-                log::info!("'You' party STT started ({})", you.stt_provider);
-                crate::stt::emit_stt_debug(&app, "info", "stt",
-                    &format!("'You' STT started: {}", you.stt_provider));
-            }
-            Err(e) => {
-                log::warn!("Failed to start 'You' STT: {}", e);
-                crate::stt::emit_stt_debug(&app, "error", "stt",
-                    &format!("'You' STT failed to start: {}", e));
-                let _ = app.emit("stt_connection_status", serde_json::json!({
-                    "provider": you.stt_provider,
-                    "party": "You",
-                    "status": "error",
-                    "message": format!("Failed to start STT: {}", e)
-                }));
-                you_stt_provider = None;
-            }
+        if let Err(e) = provider.start_stream(you_stt_tx).await {
+            log::warn!("Failed to start 'You' STT: {}", e);
+            crate::stt::emit_stt_debug(&app, "error", "stt",
+                &format!("'You' STT failed to start: {}", e));
+            let _ = app.emit("stt_connection_status", serde_json::json!({
+                "provider": you.stt_provider,
+                "party": "You",
+                "status": "error",
+                "message": format!("Failed to start STT: {}", e)
+            }));
+            let _ = provider.stop_stream().await;
+            rollback_party_capture_start(&state, &app);
+            return Err(format!("'You' transcription failed to start: {}", e));
         }
+        log::info!("'You' party STT started ({})", you.stt_provider);
+        crate::stt::emit_stt_debug(&app, "info", "stt",
+            &format!("'You' STT started: {}", you.stt_provider));
     }
 
     if let Some(ref mut provider) = them_stt_provider {
         crate::stt::emit_stt_debug(&app, "info", "stt",
             &format!("Starting 'Them' STT ({})", them.stt_provider));
-        match provider.start_stream(them_stt_tx).await {
-            Ok(()) => {
-                log::info!("'Them' party STT started ({})", them.stt_provider);
-                crate::stt::emit_stt_debug(&app, "info", "stt",
-                    &format!("'Them' STT started: {}", them.stt_provider));
+        if let Err(e) = provider.start_stream(them_stt_tx).await {
+            log::warn!("Failed to start 'Them' STT: {}", e);
+            crate::stt::emit_stt_debug(&app, "error", "stt",
+                &format!("'Them' STT failed to start: {}", e));
+            let _ = app.emit("stt_connection_status", serde_json::json!({
+                "provider": them.stt_provider,
+                "party": "Them",
+                "status": "error",
+                "message": format!("Failed to start STT: {}", e)
+            }));
+            let _ = provider.stop_stream().await;
+            if let Some(ref mut you_provider) = you_stt_provider {
+                if let Err(stop_err) = you_provider.stop_stream().await {
+                    log::warn!("Failed to roll back 'You' STT after interviewer startup error: {}", stop_err);
+                }
             }
-            Err(e) => {
-                log::warn!("Failed to start 'Them' STT: {}", e);
-                crate::stt::emit_stt_debug(&app, "error", "stt",
-                    &format!("'Them' STT failed to start: {}", e));
-                let _ = app.emit("stt_connection_status", serde_json::json!({
-                    "provider": them.stt_provider,
-                    "party": "Them",
-                    "status": "error",
-                    "message": format!("Failed to start STT: {}", e)
-                }));
-                them_stt_provider = None;
-            }
+            rollback_party_capture_start(&state, &app);
+            return Err(format!("Interviewer transcription failed to start: {}", e));
         }
+        log::info!("'Them' party STT started ({})", them.stt_provider);
+        crate::stt::emit_stt_debug(&app, "info", "stt",
+            &format!("'Them' STT started: {}", them.stt_provider));
     }
 
     // Unique session prefix to avoid segment ID collisions across mid-meeting restarts.
@@ -1033,7 +1077,6 @@ pub async fn start_capture_per_party(
         };
         tokio::spawn(async move {
             if let Some(pause_threshold) = pause_threshold {
-                // Accumulator path: merge same-speaker segments
                 use std::sync::atomic::Ordering;
                 let threshold = pause_threshold.load(Ordering::Relaxed);
                 let mut accumulator =
@@ -1065,7 +1108,6 @@ pub async fn start_capture_per_party(
                     }
                 }
 
-                // Flush remaining accumulated segment on meeting end
                 if let Some(output) = accumulator.flush() {
                     let seg_id = format!("you_{}_{}", prefix, output.id);
                     let payload = serde_json::json!({
@@ -1081,26 +1123,19 @@ pub async fn start_capture_per_party(
                     let _ = stt_app.emit("transcript_final", &payload);
                 }
             } else {
-                // Direct path: web_speech / whisper_cpp handle their own segmentation
                 let mut counter = 0u64;
                 while let Some(result) = you_stt_rx.recv().await {
                     let seg_id = if let Some(ref custom_id) = result.segment_id {
                         format!("you_{}_{}", prefix, custom_id)
                     } else {
-                        if result.is_final {
-                            counter += 1;
-                        }
+                        if result.is_final { counter += 1; }
                         if result.is_final {
                             format!("you_{}_{}", prefix, counter)
                         } else {
                             format!("you_{}_{}", prefix, counter + 1)
                         }
                     };
-                    let event_name = if result.is_final {
-                        "transcript_final"
-                    } else {
-                        "transcript_update"
-                    };
+                    let event_name = if result.is_final { "transcript_final" } else { "transcript_update" };
                     let payload = serde_json::json!({
                         "segment": {
                             "id": seg_id,
@@ -1118,8 +1153,6 @@ pub async fn start_capture_per_party(
     }
 
     // Emit transcript events from "Them" STT (speaker = "Them")
-    // Uses SegmentAccumulator to merge consecutive same-speaker segments
-    // within the configurable pause threshold, producing longer lines.
     if them_stt_provider.is_some() {
         let stt_app = app.clone();
         let prefix = session_prefix.clone();
@@ -1132,25 +1165,16 @@ pub async fn start_capture_per_party(
                 crate::stt::segment_accumulator::SegmentAccumulator::new(threshold);
 
             while let Some(result) = them_stt_rx.recv().await {
-                // Live-update threshold from settings changes
                 let current_threshold = pause_threshold.load(Ordering::Relaxed);
                 accumulator.set_pause_threshold(current_threshold);
 
                 let outputs = accumulator.feed_result(result);
                 for output in outputs {
-                    let event_name = if output.is_final {
-                        "transcript_final"
-                    } else {
-                        "transcript_update"
-                    };
-                    // Namespace IDs to avoid collision with "You" accumulator
+                    let event_name = if output.is_final { "transcript_final" } else { "transcript_update" };
                     let seg_id = format!("them_{}_{}", prefix, output.id);
-                    // Extract diarized speaker_id from accumulator output
                     let speaker_id_val = if output.speaker.starts_with("speaker_") {
                         Some(output.speaker.clone())
-                    } else {
-                        None
-                    };
+                    } else { None };
                     let mut seg = serde_json::json!({
                         "id": seg_id,
                         "text": output.text,
@@ -1159,13 +1183,10 @@ pub async fn start_capture_per_party(
                         "is_final": output.is_final,
                         "confidence": output.confidence
                     });
-                    if let Some(ref sid) = speaker_id_val {
-                        seg["speaker_id"] = serde_json::json!(sid);
-                    }
+                    if let Some(ref sid) = speaker_id_val { seg["speaker_id"] = serde_json::json!(sid); }
                     let payload = serde_json::json!({ "segment": seg });
                     let _ = stt_app.emit(event_name, &payload);
 
-                    // Push final segments to the intelligence engine
                     if output.is_final {
                         if let Some(ref intel) = intel_arc {
                             if let Ok(mut engine) = intel.lock() {
@@ -1181,14 +1202,11 @@ pub async fn start_capture_per_party(
                 }
             }
 
-            // Flush remaining accumulated segment on meeting end
             if let Some(output) = accumulator.flush() {
                 let seg_id = format!("them_{}_{}", prefix, output.id);
                 let speaker_id_val = if output.speaker.starts_with("speaker_") {
                     Some(output.speaker.clone())
-                } else {
-                    None
-                };
+                } else { None };
                 let mut seg = serde_json::json!({
                     "id": seg_id,
                     "text": output.text,
@@ -1197,9 +1215,7 @@ pub async fn start_capture_per_party(
                     "is_final": output.is_final,
                     "confidence": output.confidence
                 });
-                if let Some(ref sid) = speaker_id_val {
-                    seg["speaker_id"] = serde_json::json!(sid);
-                }
+                if let Some(ref sid) = speaker_id_val { seg["speaker_id"] = serde_json::json!(sid); }
                 let payload = serde_json::json!({ "segment": seg });
                 let _ = stt_app.emit("transcript_final", &payload);
 
@@ -1217,21 +1233,32 @@ pub async fn start_capture_per_party(
         });
     }
 
-    // Grab the recorder handle for WAV recording (with mic/system mixing)
-    let recorder = {
-        let guard = state.audio.lock().map_err(|_| "lock poisoned".to_string())?;
-        guard.as_ref().and_then(|mgr| mgr.get_recorder())
+    // Grab the recorder handle for WAV recording (with mic/system mixing).
+    // This is still part of startup: if the shared audio state cannot be read,
+    // stop providers/capture instead of returning with them orphaned.
+    let recorder = match state.audio.lock() {
+        Ok(guard) => guard.as_ref().and_then(|mgr| mgr.get_recorder()),
+        Err(_) => {
+            if let Some(ref mut provider) = you_stt_provider {
+                let _ = provider.stop_stream().await;
+            }
+            if let Some(ref mut provider) = them_stt_provider {
+                let _ = provider.stop_stream().await;
+            }
+            rollback_party_capture_start(&state, &app);
+            return Err("Audio state lock poisoned while completing startup".to_string());
+        }
     };
 
     // Grab mute flags so the audio loop can check them lock-free
     let you_muted_flag = state.you_muted.clone();
     let them_muted_flag = state.them_muted.clone();
+    let you_provider_name = you.stt_provider.clone();
+    let them_provider_name = them.stt_provider.clone();
 
     // Audio processing task: levels + recording + STT feed per party
     let app_handle = app.clone();
     tokio::spawn(async move {
-        // Separate VAD instances per audio source — sharing one VAD across
-        // interleaved mic + system chunks corrupts smoothed_energy state.
         let mut mic_vad = VoiceActivityDetector::new();
         let mut sys_vad = VoiceActivityDetector::new();
         let mut mic_emit_ctr: u32 = 0;
@@ -1239,28 +1266,23 @@ pub async fn start_capture_per_party(
         let mut mic_chunk_count: u64 = 0;
         let mut system_chunk_count: u64 = 0;
 
-        // Time-based stats — emit only every 120s to reduce dev log noise
         let mut last_mic_stats = std::time::Instant::now();
         let mut last_sys_stats = std::time::Instant::now();
         let stats_interval = std::time::Duration::from_secs(120);
 
-        // Mix buffers for proper two-source recording
         let mut mix_mic: Vec<i16> = Vec::new();
         let mut mix_sys: Vec<i16> = Vec::new();
 
-        // Track feed_audio errors per provider (emit once, not every chunk)
         let mut you_feed_error_emitted = false;
         let mut them_feed_error_emitted = false;
 
         while let Some(mut chunk) = rx.recv().await {
-            // Apply VAD from the correct per-source instance
             let vad_result = match chunk.source {
                 AudioSource::Mic | AudioSource::Room => mic_vad.process_chunk(&chunk.pcm_data),
                 AudioSource::System => sys_vad.process_chunk(&chunk.pcm_data),
             };
             chunk.is_speech = vad_result.is_speech;
 
-            // Track chunk counts for diagnostics (time-based stats)
             match chunk.source {
                 AudioSource::Mic | AudioSource::Room => {
                     mic_chunk_count += 1;
@@ -1296,7 +1318,6 @@ pub async fn start_capture_per_party(
                 }
             }
 
-            // Emit audio levels — separate counters per source for independent update rates
             let should_emit = match chunk.source {
                 AudioSource::Mic | AudioSource::Room => {
                     mic_emit_ctr += 1;
@@ -1318,7 +1339,6 @@ pub async fn start_capture_per_party(
                 let _ = app_handle.emit("audio_level", &level);
             }
 
-            // Recording with mic/system mixing
             if let Some(ref rec) = recorder {
                 match chunk.source {
                     AudioSource::Mic => mix_mic.extend_from_slice(&chunk.pcm_data),
@@ -1344,9 +1364,6 @@ pub async fn start_capture_per_party(
                 }
             }
 
-            // Route to the correct party's STT provider (surface errors once).
-            // Mute gate: when a party is muted, skip feed_audio entirely —
-            // audio levels + recording still flow, only STT is silenced.
             match chunk.source {
                 AudioSource::Mic => {
                     if !you_muted_flag.load(Ordering::Relaxed) {
@@ -1355,6 +1372,12 @@ pub async fn start_capture_per_party(
                                 if !you_feed_error_emitted {
                                     crate::stt::emit_stt_debug(&app_handle, "error", "stt",
                                         &format!("'You' feed_audio error: {}", e));
+                                    let _ = app_handle.emit("stt_connection_status", serde_json::json!({
+                                        "provider": you_provider_name,
+                                        "party": "You",
+                                        "status": "error",
+                                        "message": format!("Live transcription audio error: {}", e)
+                                    }));
                                     you_feed_error_emitted = true;
                                 }
                             }
@@ -1368,6 +1391,12 @@ pub async fn start_capture_per_party(
                                 if !them_feed_error_emitted {
                                     crate::stt::emit_stt_debug(&app_handle, "error", "stt",
                                         &format!("'Them' feed_audio error: {}", e));
+                                    let _ = app_handle.emit("stt_connection_status", serde_json::json!({
+                                        "provider": them_provider_name,
+                                        "party": "Them",
+                                        "status": "error",
+                                        "message": format!("Interviewer transcription audio error: {}", e)
+                                    }));
                                     them_feed_error_emitted = true;
                                 }
                             }
@@ -1375,14 +1404,18 @@ pub async fn start_capture_per_party(
                     }
                 }
                 AudioSource::Room => {
-                    // In-person mode: room audio routes to the "Them" provider
-                    // (which handles diarization). Use the same mute gate.
                     if !them_muted_flag.load(Ordering::Relaxed) {
                         if let Some(ref mut provider) = them_stt_provider {
                             if let Err(e) = provider.feed_audio(chunk).await {
                                 if !them_feed_error_emitted {
                                     crate::stt::emit_stt_debug(&app_handle, "error", "stt",
                                         &format!("'Room' feed_audio error: {}", e));
+                                    let _ = app_handle.emit("stt_connection_status", serde_json::json!({
+                                        "provider": them_provider_name,
+                                        "party": "Them",
+                                        "status": "error",
+                                        "message": format!("Room transcription audio error: {}", e)
+                                    }));
                                     them_feed_error_emitted = true;
                                 }
                             }
@@ -1392,7 +1425,6 @@ pub async fn start_capture_per_party(
             }
         }
 
-        // Flush remaining mix buffers
         if let Some(ref rec) = recorder {
             let mix_len = mix_mic.len().min(mix_sys.len());
             if mix_len > 0 {
@@ -1408,23 +1440,19 @@ pub async fn start_capture_per_party(
             if !mix_sys.is_empty() { rec.write_samples(&mix_sys); }
         }
 
-        // Clean shutdown
         if let Some(ref mut provider) = you_stt_provider {
-            let _ = provider.stop_stream().await;
+            if let Err(e) = provider.stop_stream().await {
+                log::warn!("Failed to stop 'You' STT cleanly: {}", e);
+            }
         }
         if let Some(ref mut provider) = them_stt_provider {
-            let _ = provider.stop_stream().await;
+            if let Err(e) = provider.stop_stream().await {
+                log::warn!("Failed to stop 'Them' STT cleanly: {}", e);
+            }
         }
 
-        // Restore IPolicyConfig override if active (crash recovery for async task exit)
-        {
-            let original = app_handle
-                .try_state::<AppState>()
-                .and_then(|s| s.original_default_device.lock().ok()?.take());
-            if let Some(ref original_id) = original {
-                let _ = crate::audio::device_default::restore_default_capture_device(original_id);
-                log::info!("IPolicyConfig: restored default device on audio task exit");
-            }
+        if let Some(state) = app_handle.try_state::<AppState>() {
+            restore_default_device_if_overridden(&state, &app_handle);
         }
 
         log::info!("Per-party audio processing task exiting");
@@ -1435,11 +1463,8 @@ pub async fn start_capture_per_party(
 }
 
 /// Create an STT provider for a party based on their config.
-/// Returns None if the party uses web_speech (frontend-only).
-///
-/// API keys are read directly from the credential store (not the STTRouter)
-/// because per-party mode never calls set_stt_provider(), so the router's
-/// cached keys are always None.
+/// Returns None only if the party uses web_speech (frontend-only). Every
+/// backend provider fails closed when credentials/models/binaries are missing.
 async fn create_stt_provider_for_party(
     config: &crate::audio::PartyAudioConfig,
     state: &AppState,
@@ -1459,40 +1484,25 @@ async fn create_stt_provider_for_party(
             config.local_model_id.as_deref().unwrap_or("n/a")));
 
     match stt_type {
-        STTProviderType::WebSpeech => Ok(None), // Frontend handles this
+        STTProviderType::WebSpeech => Ok(None),
         STTProviderType::WhisperCpp => {
             let model_id = config.local_model_id.as_deref().unwrap_or("base");
-            let model_result = get_local_model_path(state, "whisper_cpp", model_id)
-                .or_else(|_| find_any_downloaded_model(state, "whisper_cpp"));
-            match model_result {
-                Ok(model_path) => {
-                    let lang = get_stt_language(state);
-                    let whisper_config = state.whisper_config.clone();
-                    let mut p = crate::stt::whisper_cpp::WhisperCppSTT::new(model_path, whisper_config);
-                    p.set_language(&lang);
-                    Ok(Some(Box::new(p)))
-                }
-                Err(e) => {
-                    log::warn!(
-                        "WhisperCpp: {} — no transcription for this party. \
-                         Download the model in Settings.",
-                        e
-                    );
-                    Ok(None)
-                }
-            }
+            let model_path = get_local_model_path(state, "whisper_cpp", model_id)
+                .or_else(|_| find_any_downloaded_model(state, "whisper_cpp"))
+                .map_err(|e| format!("WhisperCpp model unavailable: {}", e))?;
+            let lang = get_stt_language(state);
+            let whisper_config = state.whisper_config.clone();
+            let mut p = crate::stt::whisper_cpp::WhisperCppSTT::new(model_path, whisper_config);
+            p.set_language(&lang);
+            Ok(Some(Box::new(p)))
         }
         STTProviderType::WindowsNative => {
+            if !config.is_input_device {
+                return Err("Windows Speech only supports microphone/input-device transcription".to_string());
+            }
             use crate::stt::windows_native::WindowsNativeSTT;
             let lang = get_stt_language(state);
-            let mut provider = if config.is_input_device {
-                // IPolicyConfig already overrides system default to the selected device,
-                // so DirectMic mode correctly captures from non-default devices too
-                WindowsNativeSTT::for_mic()
-            } else {
-                // System audio: feed PCM from pipeline
-                WindowsNativeSTT::for_custom_stream()
-            };
+            let mut provider = WindowsNativeSTT::for_mic();
             provider.set_language(&lang);
             provider.set_app_handle(app.clone());
             provider.set_party(party_role);
@@ -1500,13 +1510,10 @@ async fn create_stt_provider_for_party(
         }
         STTProviderType::Deepgram => {
             let lang = get_stt_language(state);
-            let key = get_credential_key(state, "deepgram");
-            log::info!("Deepgram key for '{}': {}", party_role, if key.is_some() { "present" } else { "MISSING" });
+            let key = get_credential_key(state, "deepgram")
+                .ok_or_else(|| "Deepgram API key is not configured".to_string())?;
             let dg_config = get_deepgram_config(state);
-            let mut p = match key.as_deref() {
-                Some(k) => crate::stt::deepgram::DeepgramSTT::with_api_key(k),
-                None => crate::stt::deepgram::DeepgramSTT::new(),
-            };
+            let mut p = crate::stt::deepgram::DeepgramSTT::with_api_key(&key);
             p.set_language(&lang);
             p.set_config(dg_config);
             p.set_app_handle(app.clone());
@@ -1515,47 +1522,34 @@ async fn create_stt_provider_for_party(
         }
         STTProviderType::WhisperApi => {
             let lang = get_stt_language(state);
-            let key = get_credential_key(state, "whisper_api");
-            log::info!("WhisperApi key for '{}': {}", party_role, if key.is_some() { "present" } else { "MISSING" });
-            let mut p = match key.as_deref() {
-                Some(k) => crate::stt::whisper_api::WhisperApiSTT::with_api_key(k),
-                None => crate::stt::whisper_api::WhisperApiSTT::new(),
-            };
+            let key = get_credential_key(state, "whisper_api")
+                .ok_or_else(|| "OpenAI/Whisper API key is not configured".to_string())?;
+            let mut p = crate::stt::whisper_api::WhisperApiSTT::with_api_key(&key);
             p.set_language(&lang);
             Ok(Some(Box::new(p)))
         }
         STTProviderType::AzureSpeech => {
             let lang = get_stt_language(state);
-            let key = get_credential_key(state, "azure_speech");
-            let region = get_credential_key(state, "azure_speech_region");
-            log::info!("Azure key for '{}': {}, region: {}", party_role,
-                if key.is_some() { "present" } else { "MISSING" },
-                if region.is_some() { "present" } else { "MISSING" });
-            let mut p = match (key.as_deref(), region.as_deref()) {
-                (Some(k), Some(r)) => crate::stt::azure_speech::AzureSpeechSTT::with_config(k, r),
-                _ => crate::stt::azure_speech::AzureSpeechSTT::new(),
-            };
+            let key = get_credential_key(state, "azure_speech")
+                .ok_or_else(|| "Azure Speech API key is not configured".to_string())?;
+            let region = get_credential_key(state, "azure_speech_region")
+                .ok_or_else(|| "Azure Speech region is not configured".to_string())?;
+            let mut p = crate::stt::azure_speech::AzureSpeechSTT::with_config(&key, &region);
             p.set_language(&lang);
             Ok(Some(Box::new(p)))
         }
         STTProviderType::GroqWhisper => {
             let lang = get_stt_language(state);
-            let key = get_credential_key(state, "groq_whisper");
-            log::info!("Groq key for '{}': {}", party_role, if key.is_some() { "present" } else { "MISSING" });
-            let mut p = match key.as_deref() {
-                Some(k) => crate::stt::groq_whisper::GroqWhisperSTT::with_api_key(k),
-                None => crate::stt::groq_whisper::GroqWhisperSTT::new(),
-            };
+            let key = get_credential_key(state, "groq_whisper")
+                .ok_or_else(|| "Groq Whisper API key is not configured".to_string())?;
+            let mut p = crate::stt::groq_whisper::GroqWhisperSTT::with_api_key(&key);
             p.set_language(&lang);
-            // Use shared config Arc — provider reads latest config on each API call,
-            // so settings changes take effect immediately without restarting
             p.set_shared_config(state.shared_groq_config.clone());
             p.set_app_handle(app.clone());
             p.set_party(party_role);
             Ok(Some(Box::new(p)))
         }
         STTProviderType::SherpaOnnx => {
-            // Guard: ignore model_id from a different engine (e.g., parakeet model)
             let raw_model_id = config.local_model_id.as_deref();
             let model_id = match raw_model_id {
                 Some(id) if id.contains("parakeet") || id.contains("nemo") => {
@@ -1565,88 +1559,55 @@ async fn create_stt_provider_for_party(
                 Some(id) => id,
                 None => "streaming-zipformer-en-20M",
             };
-            let model_result = get_local_model_path(state, "sherpa_onnx", model_id);
-            match model_result {
-                Ok(model_dir) => {
-                    let lang = get_stt_language(state);
-                    // Check if this is a non-transducer model (SenseVoice, etc.)
-                    // by trying offline discovery first.
-                    let offline_files = crate::stt::local_engines::model_discovery::discover_offline_model_files(&model_dir);
-                    if let Ok(offline) = offline_files {
-                        // Non-transducer model → use offline sidecar (sherpa-onnx-offline.exe)
-                        let binary = find_offline_binary_for_state(state);
-                        match binary {
-                            Some(binary_path) => {
-                                crate::stt::emit_stt_debug(app, "info", "stt",
-                                    &format!("[{}] SherpaOnnx offline model '{}' from {} (lang={})",
-                                        party_role, model_id, model_dir.display(), lang));
-                                // Detect model type from model_id
-                                let model_type = if model_id.contains("sense-voice") {
-                                    crate::stt::sherpa_offline::OfflineModelType::SenseVoice
-                                } else {
-                                    crate::stt::sherpa_offline::OfflineModelType::NemoCtc
-                                };
-                                let mut p = crate::stt::sherpa_offline::SherpaOfflineSTT::new(
-                                    binary_path,
-                                    offline.model,
-                                    offline.tokens,
-                                    model_type,
-                                    STTProviderType::SherpaOnnx,
-                                );
-                                p.set_language(&lang);
-                                p.set_app_handle(app.clone());
-                                Ok(Some(Box::new(p)))
-                            }
-                            None => {
-                                crate::stt::emit_stt_debug(app, "error", "stt",
-                                    &format!("[{}] sherpa-onnx-offline.exe not found. Download Sherpa-ONNX binary in Settings.",
-                                        party_role));
-                                Ok(None)
-                            }
-                        }
-                    } else {
-                        // Transducer model → use in-process ORT engine
-                        crate::stt::emit_stt_debug(app, "info", "stt",
-                            &format!("[{}] SherpaOnnx loading model '{}' from {} (lang={})",
-                                party_role, model_id, model_dir.display(), lang));
-                        let mut p = crate::stt::ort_streaming::OrtStreamingSTT::new(model_dir);
-                        p.set_language(&lang);
-                        p.set_app_handle(app.clone());
-                        Ok(Some(Box::new(p)))
-                    }
-                }
-                Err(e) => {
-                    crate::stt::emit_stt_debug(app, "error", "stt",
-                        &format!("[{}] SherpaOnnx model '{}' not found: {}. Download in Settings.",
-                            party_role, model_id, e));
-                    Ok(None)
-                }
+            let model_dir = get_local_model_path(state, "sherpa_onnx", model_id)
+                .map_err(|e| format!("SherpaOnnx model '{}' unavailable: {}", model_id, e))?;
+            let lang = get_stt_language(state);
+            let offline_files = crate::stt::local_engines::model_discovery::discover_offline_model_files(&model_dir);
+            if let Ok(offline) = offline_files {
+                let binary_path = find_offline_binary_for_state(state)
+                    .ok_or_else(|| "sherpa-onnx-offline.exe is not installed".to_string())?;
+                crate::stt::emit_stt_debug(app, "info", "stt",
+                    &format!("[{}] SherpaOnnx offline model '{}' from {} (lang={})",
+                        party_role, model_id, model_dir.display(), lang));
+                let model_type = if model_id.contains("sense-voice") {
+                    crate::stt::sherpa_offline::OfflineModelType::SenseVoice
+                } else {
+                    crate::stt::sherpa_offline::OfflineModelType::NemoCtc
+                };
+                let mut p = crate::stt::sherpa_offline::SherpaOfflineSTT::new(
+                    binary_path,
+                    offline.model,
+                    offline.tokens,
+                    model_type,
+                    STTProviderType::SherpaOnnx,
+                );
+                p.set_language(&lang);
+                p.set_app_handle(app.clone());
+                Ok(Some(Box::new(p)))
+            } else {
+                crate::stt::emit_stt_debug(app, "info", "stt",
+                    &format!("[{}] SherpaOnnx loading model '{}' from {} (lang={})",
+                        party_role, model_id, model_dir.display(), lang));
+                let mut p = crate::stt::ort_streaming::OrtStreamingSTT::new(model_dir);
+                p.set_language(&lang);
+                p.set_app_handle(app.clone());
+                Ok(Some(Box::new(p)))
             }
         }
         STTProviderType::OrtStreaming => {
             let model_id = config.local_model_id.as_deref().unwrap_or("zipformer-en-20M");
-            let model_result = get_local_model_path(state, "ort_streaming", model_id);
-            match model_result {
-                Ok(model_dir) => {
-                    let lang = get_stt_language(state);
-                    crate::stt::emit_stt_debug(app, "info", "stt",
-                        &format!("[{}] ORT loading model '{}' from {} (lang={})",
-                            party_role, model_id, model_dir.display(), lang));
-                    let mut p = crate::stt::ort_streaming::OrtStreamingSTT::new(model_dir);
-                    p.set_language(&lang);
-                    p.set_app_handle(app.clone());
-                    Ok(Some(Box::new(p)))
-                }
-                Err(e) => {
-                    crate::stt::emit_stt_debug(app, "error", "stt",
-                        &format!("[{}] ORT model '{}' not found: {}. Download in Settings.",
-                            party_role, model_id, e));
-                    Ok(None)
-                }
-            }
+            let model_dir = get_local_model_path(state, "ort_streaming", model_id)
+                .map_err(|e| format!("ORT model '{}' unavailable: {}", model_id, e))?;
+            let lang = get_stt_language(state);
+            crate::stt::emit_stt_debug(app, "info", "stt",
+                &format!("[{}] ORT loading model '{}' from {} (lang={})",
+                    party_role, model_id, model_dir.display(), lang));
+            let mut p = crate::stt::ort_streaming::OrtStreamingSTT::new(model_dir);
+            p.set_language(&lang);
+            p.set_app_handle(app.clone());
+            Ok(Some(Box::new(p)))
         }
         STTProviderType::ParakeetTdt => {
-            // Guard: ignore model_id from a different engine (e.g., sense-voice-small from sherpa_onnx)
             let raw_model_id = config.local_model_id.as_deref();
             let model_id = match raw_model_id {
                 Some(id) if id.contains("parakeet") || id.contains("nemo") => id,
@@ -1659,63 +1620,34 @@ async fn create_stt_provider_for_party(
             crate::stt::emit_stt_debug(app, "info", "stt",
                 &format!("[{}] Parakeet TDT: looking for model '{}' (local_model_id={:?})",
                     party_role, model_id, config.local_model_id));
-            let model_result = get_local_model_path(state, "parakeet_tdt", model_id)
-                .or_else(|_| find_any_downloaded_model(state, "parakeet_tdt"));
-            match model_result {
-                Ok(model_dir) => {
-                    let lang = get_stt_language(state);
-                    // Auto-detect model type: transducer (encoder/decoder/joiner) vs CTC (model.onnx)
-                    let transducer = crate::stt::local_engines::model_discovery::discover_model_files(&model_dir);
-                    if transducer.is_ok() {
-                        // Transducer model (e.g., 0.6B v3) → use in-process ORT streaming
-                        crate::stt::emit_stt_debug(app, "info", "stt",
-                            &format!("[{}] Parakeet transducer model from {} (lang={})",
-                                party_role, model_dir.display(), lang));
-                        let mut p = crate::stt::ort_streaming::OrtStreamingSTT::new(model_dir);
-                        p.set_language(&lang);
-                        p.set_app_handle(app.clone());
-                        Ok(Some(Box::new(p)))
-                    } else {
-                        // CTC model (e.g., 110M) → use offline sidecar
-                        let offline_files = crate::stt::local_engines::model_discovery::discover_offline_model_files(&model_dir);
-                        match offline_files {
-                            Ok(offline) => {
-                                let binary = find_offline_binary_for_state(state);
-                                match binary {
-                                    Some(binary_path) => {
-                                        crate::stt::emit_stt_debug(app, "info", "stt",
-                                            &format!("[{}] Parakeet CTC offline model from {} (lang={})",
-                                                party_role, model_dir.display(), lang));
-                                        let mut p = crate::stt::sherpa_offline::SherpaOfflineSTT::new(
-                                            binary_path, offline.model, offline.tokens,
-                                            crate::stt::sherpa_offline::OfflineModelType::NemoCtc,
-                                            STTProviderType::ParakeetTdt,
-                                        );
-                                        p.set_language(&lang);
-                                        p.set_app_handle(app.clone());
-                                        Ok(Some(Box::new(p)))
-                                    }
-                                    None => {
-                                        crate::stt::emit_stt_debug(app, "error", "stt",
-                                            &format!("[{}] sherpa-onnx-offline.exe not found.", party_role));
-                                        Ok(None)
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                crate::stt::emit_stt_debug(app, "error", "stt",
-                                    &format!("[{}] Parakeet model discovery failed: {}", party_role, e));
-                                Ok(None)
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    crate::stt::emit_stt_debug(app, "error", "stt",
-                        &format!("[{}] Parakeet model '{}' not found: {}. Download in Settings.",
-                            party_role, model_id, e));
-                    Ok(None)
-                }
+            let model_dir = get_local_model_path(state, "parakeet_tdt", model_id)
+                .or_else(|_| find_any_downloaded_model(state, "parakeet_tdt"))
+                .map_err(|e| format!("Parakeet model '{}' unavailable: {}", model_id, e))?;
+            let lang = get_stt_language(state);
+            if crate::stt::local_engines::model_discovery::discover_model_files(&model_dir).is_ok() {
+                crate::stt::emit_stt_debug(app, "info", "stt",
+                    &format!("[{}] Parakeet transducer model from {} (lang={})",
+                        party_role, model_dir.display(), lang));
+                let mut p = crate::stt::ort_streaming::OrtStreamingSTT::new(model_dir);
+                p.set_language(&lang);
+                p.set_app_handle(app.clone());
+                Ok(Some(Box::new(p)))
+            } else {
+                let offline = crate::stt::local_engines::model_discovery::discover_offline_model_files(&model_dir)
+                    .map_err(|e| format!("Parakeet model discovery failed: {}", e))?;
+                let binary_path = find_offline_binary_for_state(state)
+                    .ok_or_else(|| "sherpa-onnx-offline.exe is not installed".to_string())?;
+                crate::stt::emit_stt_debug(app, "info", "stt",
+                    &format!("[{}] Parakeet CTC offline model from {} (lang={})",
+                        party_role, model_dir.display(), lang));
+                let mut p = crate::stt::sherpa_offline::SherpaOfflineSTT::new(
+                    binary_path, offline.model, offline.tokens,
+                    crate::stt::sherpa_offline::OfflineModelType::NemoCtc,
+                    STTProviderType::ParakeetTdt,
+                );
+                p.set_language(&lang);
+                p.set_app_handle(app.clone());
+                Ok(Some(Box::new(p)))
             }
         }
     }
@@ -1747,7 +1679,7 @@ fn find_any_downloaded_model(
                 if m.is_downloaded {
                     if let Some(path) = mgr.get_model_path(engine, m.definition.model_id) {
                         log::info!(
-                            "WhisperCpp: using fallback model '{}' (requested model unavailable)",
+                            "Local STT: using fallback model '{}' (requested model unavailable)",
                             m.definition.model_id
                         );
                         return Ok(path);
@@ -1813,7 +1745,6 @@ fn get_deepgram_config(state: &AppState) -> crate::stt::deepgram::DeepgramConfig
 pub async fn ensure_ipolicy_override(app: AppHandle) -> Result<String, String> {
     let state = app.state::<AppState>();
 
-    // 1. Check if an override is active (peek, not take)
     let original = match state.original_default_device.lock() {
         Ok(guard) => guard.clone(),
         Err(_) => return Err("State lock poisoned".to_string()),
@@ -1825,7 +1756,6 @@ pub async fn ensure_ipolicy_override(app: AppHandle) -> Result<String, String> {
         })).map_err(|e| e.to_string());
     }
 
-    // 2. Get the target endpoint (peek, not take)
     let target = match state.ipolicy_target_endpoint.lock() {
         Ok(guard) => guard.clone(),
         Err(_) => return Err("State lock poisoned".to_string()),
@@ -1842,7 +1772,6 @@ pub async fn ensure_ipolicy_override(app: AppHandle) -> Result<String, String> {
         }
     };
 
-    // 3. Read current OS default (handles COM init internally)
     log::info!("IPolicyConfig: verifying default capture device...");
 
     #[cfg(target_os = "windows")]
@@ -1900,34 +1829,44 @@ pub async fn ensure_ipolicy_override(app: AppHandle) -> Result<String, String> {
 // ── IPolicyConfig restore helper ────────────────────────────────────
 
 /// Restore the original default capture device if an IPolicyConfig override is active.
-/// Safe to call even if no override was applied (no-op in that case).
-/// Uses `take()` to atomically remove the stored value, preventing TOCTOU races
-/// where a concurrent hot-swap could lose a newly-stored override.
+/// Safe to call repeatedly. On restore failure, retain the saved endpoint so a
+/// later stop/task-exit attempt still has enough state to recover Windows.
 fn restore_default_device_if_overridden(state: &AppState, app: &tauri::AppHandle) {
-    // Atomically take the value — if another thread races, only one gets Some
     let original = match state.original_default_device.lock() {
         Ok(mut guard) => guard.take(),
-        Err(_) => return,
+        Err(_) => {
+            crate::stt::emit_stt_debug(app, "error", "audio",
+                "IPolicyConfig: recovery state lock poisoned; default device may need manual restore");
+            return;
+        }
     };
 
-    // Also clear the target endpoint
-    if let Ok(mut target_guard) = state.ipolicy_target_endpoint.lock() {
-        target_guard.take();
-    }
+    let Some(original_id) = original else {
+        if let Ok(mut target_guard) = state.ipolicy_target_endpoint.lock() {
+            target_guard.take();
+        }
+        return;
+    };
 
-    if let Some(ref original_id) = original {
-        crate::stt::emit_stt_debug(app, "info", "audio",
-            &format!("IPolicyConfig: restoring default capture → '{}'", original_id));
+    crate::stt::emit_stt_debug(app, "info", "audio",
+        &format!("IPolicyConfig: restoring default capture → '{}'", original_id));
 
-        match crate::audio::device_default::restore_default_capture_device(original_id) {
-            Ok(()) => {
-                crate::stt::emit_stt_debug(app, "info", "audio",
-                    "IPolicyConfig: default capture device restored");
+    match crate::audio::device_default::restore_default_capture_device(&original_id) {
+        Ok(()) => {
+            if let Ok(mut target_guard) = state.ipolicy_target_endpoint.lock() {
+                target_guard.take();
             }
-            Err(e) => {
-                crate::stt::emit_stt_debug(app, "error", "audio",
-                    &format!("IPolicyConfig: restore failed: {}", e));
+            crate::stt::emit_stt_debug(app, "info", "audio",
+                "IPolicyConfig: default capture device restored");
+        }
+        Err(e) => {
+            if let Ok(mut guard) = state.original_default_device.lock() {
+                if guard.is_none() {
+                    *guard = Some(original_id.clone());
+                }
             }
+            crate::stt::emit_stt_debug(app, "error", "audio",
+                &format!("IPolicyConfig: restore failed (will retry on next cleanup): {}", e));
         }
     }
 }
@@ -1969,4 +1908,3 @@ pub async fn get_mute_status(app: AppHandle) -> Result<String, String> {
     });
     serde_json::to_string(&status).map_err(|e| format!("Failed to serialize: {}", e))
 }
-
