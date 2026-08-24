@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { AIResponse, IntelligenceMode, StreamSource } from "../lib/types";
 import { stripThinkTags } from "../lib/utils";
 import { teleprompterDocumentFromAIResponse } from "../teleprompter/handoff";
+import { useOverlayLayoutStore } from "./overlayLayoutStore";
 import { useTeleprompterStore } from "./teleprompterStore";
 
 interface StreamState {
@@ -94,17 +95,22 @@ export const useStreamStore = create<StreamState>((set, get) => ({
       responseHistory: [response, ...s.responseHistory].slice(0, 5),
     }));
 
-    // A new interview answer must never displace an answer the user is already reading.
-    // While a teleprompter document is active, stage completed WhatToSay guidance as pending;
-    // explicit Prompt actions remain immediate user-authorized activation paths.
+    // Completed interview guidance enters the teleprompter lifecycle automatically:
+    // the first answer may activate an empty teleprompter, but a later answer must
+    // never displace text the user is already reading or editing.
     if (response.mode === "WhatToSay" && content.trim()) {
-      const teleprompter = useTeleprompterStore.getState();
-      if (teleprompter.document && !teleprompter.isEditing) {
-        try {
-          teleprompter.stagePendingDocument(teleprompterDocumentFromAIResponse(response));
-        } catch (error) {
-          console.warn("Failed to stage generated teleprompter answer", error);
+      try {
+        const document = teleprompterDocumentFromAIResponse(response);
+        const teleprompter = useTeleprompterStore.getState();
+
+        if (!teleprompter.document) {
+          teleprompter.setDocument(document);
+          useOverlayLayoutStore.getState().setLayoutMode("teleprompt");
+        } else if (!teleprompter.isEditing) {
+          teleprompter.stagePendingDocument(document);
         }
+      } catch (error) {
+        console.warn("Failed to hand generated interview answer to teleprompter", error);
       }
     }
   },
@@ -128,6 +134,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
 
   unpinResponse: (id) =>
     set((state) => ({
-      pinnedResponses: state.pinnedResponses.filter((r) => r.id !== id),
+      pinnedResponses: state.pinnedResponses.filter((r) => r.id !== id,
+      ),
     })),
 }));
