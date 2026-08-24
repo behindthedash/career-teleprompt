@@ -338,9 +338,10 @@ export function TeleprompterPanel() {
 
         <div
           ref={scrollRef}
-          className="h-full overflow-y-auto overscroll-contain px-[8%] py-[38%] scroll-smooth"
+          className="h-full overflow-y-auto overscroll-contain px-[8%] scroll-smooth"
         >
-          <div className="mx-auto max-w-4xl space-y-16 pb-[38%]">
+          <div className="h-[42%] min-h-16" aria-hidden="true" />
+          <div className="mx-auto max-w-4xl space-y-16">
             {displaySections.map((displaySection, sectionIndex) => {
               const active = sectionIndex === activeSectionIndex;
               const sectionReadingPieceIndex = active
@@ -386,6 +387,7 @@ export function TeleprompterPanel() {
               );
             })}
           </div>
+          <div className="h-[58%] min-h-24" aria-hidden="true" />
         </div>
       </div>
 
