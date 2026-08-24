@@ -392,6 +392,7 @@ pub async fn test_rag_answer(
         Vec::new(),                 // rag_chunks (not tracked for test)
         0,                          // rag_chunks_filtered
         chunks.len(),               // rag_total_candidates
+        None,                       // no interview RAG diagnostics for standalone test
         0,                          // transcript_window_seconds (no transcript)
         0,                          // transcript_segments_count
         0,                          // transcript_segments_total
