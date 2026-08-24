@@ -100,9 +100,9 @@ try {
   }, interviewerQuestion);
   await page.getByText(interviewerQuestion).waitFor();
 
-  // Click the production What to Say control. The mocked native command streams
-  // back through the same llm_stream_* subscriptions used by the Tauri app.
-  await page.getByRole("button", { name: /What to Say/i }).click();
+  // Click the production interview "Say" action. Its configured mode remains
+  // WhatToSay; the current UI exposes the control as "Say (1)".
+  await page.getByRole("button", { name: /^Say \(1\)$/ }).click();
   await page.getByText(/I would design the pipeline around durable event streams/i).waitFor();
   await page.waitForFunction(() =>
     (window.__CAREER_TELEPROMPT_WORKFLOW__?.state().stream.responseCount ?? 0) > 0
@@ -110,7 +110,8 @@ try {
   const generationCall = await page.evaluate(() =>
     window.__CAREER_TELEPROMPT_WORKFLOW__?.commandCalls().find((call) => call.command === "generate_assist")
   );
-  assert(generationCall, "What to Say did not invoke generate_assist");
+  assert(generationCall, "Say did not invoke generate_assist");
+  assert(generationCall.args?.mode === "WhatToSay", "Say did not use the WhatToSay generation mode");
   const serializedTranscript = String(generationCall.args?.transcriptSegments ?? "");
   assert(serializedTranscript.includes("reliable real-time data pipeline"), "generate_assist did not receive the live transcript");
   await checkpoint("what-to-say-answer");
