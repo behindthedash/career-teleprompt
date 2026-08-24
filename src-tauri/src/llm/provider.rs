@@ -98,12 +98,12 @@ pub struct StreamStartPayload {
     pub include_rag: bool,
     pub include_instructions: bool,
     pub include_question: bool,
-    // New fields for AI log enrichment
     pub temperature: f64,
     pub rag_query: Option<String>,
     pub rag_chunks: Vec<RagChunkInfo>,
     pub rag_chunks_filtered: usize,
     pub rag_total_candidates: usize,
+    pub rag_diagnostics: Option<RagDiagnostics>,
     pub transcript_window_seconds: u64,
     pub transcript_segments_count: usize,
     pub transcript_segments_total: usize,
@@ -117,6 +117,23 @@ pub struct RagChunkInfo {
     pub text: String,
     pub normalized_score: f64,
     pub raw_score: f64,
+    pub source_type: String,
+    pub evidence_kind: String,
+    pub ranking_score: f64,
+    pub question_overlap: f64,
+}
+
+/// Diagnostics for one RAG retrieval pass used by a generated response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RagDiagnostics {
+    pub question_search_ms: u64,
+    pub contextual_search_ms: u64,
+    pub merge_rerank_ms: u64,
+    pub total_ms: u64,
+    pub indexed_chunks: usize,
+    pub candidates_before_dedup: usize,
+    pub unique_candidates: usize,
+    pub selected_chunks: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,13 +163,13 @@ pub struct StreamSourcesPayload {
 /// Trait that all LLM providers implement.
 #[async_trait::async_trait]
 pub trait LLMProvider: Send + Sync {
-    /// Returns the name of this provider (e.g., "openai", "ollama")
+    /// Returns the name of this provider (e.g. "openai", "ollama")
     fn provider_name(&self) -> &str;
 
-    /// Lists available models for this provider
+    /// Lists available models for this provider.
     async fn list_models(&self) -> Result<Vec<ModelInfo>, LLMError>;
 
-    /// Tests whether the provider is reachable and properly configured
+    /// Tests whether the provider is reachable and properly configured.
     async fn test_connection(&self) -> Result<bool, LLMError>;
 
     /// Streams a completion response, emitting tokens via Tauri events.
