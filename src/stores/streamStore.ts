@@ -8,6 +8,7 @@ import { useTeleprompterStore } from "./teleprompterStore";
 interface StreamState {
   // Current stream
   isStreaming: boolean;
+  isRequestPending: boolean;
   currentContent: string;
   _rawContent: string; // unfiltered content (includes <think> tags)
   currentMode: IntelligenceMode | null;
@@ -23,6 +24,7 @@ interface StreamState {
 
   // Actions
   setStreaming: (streaming: boolean) => void;
+  setRequestPending: (pending: boolean) => void;
   appendToken: (token: string) => void;
   startStream: (mode: IntelligenceMode, model: string, provider: string) => void;
   setSources: (sources: StreamSource[]) => void;
@@ -33,8 +35,15 @@ interface StreamState {
   unpinResponse: (id: string) => void;
 }
 
+export function isGenerationBusy(
+  state: Pick<StreamState, "isStreaming" | "isRequestPending">,
+): boolean {
+  return state.isStreaming || state.isRequestPending;
+}
+
 export const useStreamStore = create<StreamState>((set, get) => ({
   isStreaming: false,
+  isRequestPending: false,
   currentContent: "",
   _rawContent: "",
   currentMode: null,
@@ -47,6 +56,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
   pinnedResponses: [],
 
   setStreaming: (streaming) => set({ isStreaming: streaming }),
+  setRequestPending: (pending) => set({ isRequestPending: pending }),
 
   appendToken: (token) =>
     set((state) => {
