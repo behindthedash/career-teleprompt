@@ -25,8 +25,9 @@ export function getSpeakerColor(speakerId: string, orderIndex: number): string {
   return SPEAKER_COLORS[orderIndex % SPEAKER_COLORS.length];
 }
 
-// Badge colors for audio mode
+// Badge colors for audio mode. Text colors are intentionally lighter than the
+// palette fills so 9px badge labels remain WCAG AA-readable on tinted dark backgrounds.
 export const MODE_COLORS = {
-  online: { text: "#4a6cf7", bg: "rgba(74,108,247,0.15)" },
-  in_person: { text: "#a855f7", bg: "rgba(168,85,247,0.15)" },
+  online: { text: "#7c9cff", bg: "rgba(74,108,247,0.15)" },
+  in_person: { text: "#c084fc", bg: "rgba(168,85,247,0.15)" },
 } as const;
