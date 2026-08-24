@@ -40,7 +40,7 @@ const MAX_ASSEMBLY_CHARS: usize = 1_200;
 const MIN_UNPUNCTUATED_TOKENS: usize = 8;
 const DUPLICATE_WINDOW_MS: u64 = 15_000;
 const RECENT_QUESTION_LIMIT: usize = 8;
-const DUPLICATE_JACCARD_THRESHOLD: f64 = 0.85;
+const DUPLICATE_JACCARD_THRESHOLD: f64 = 0.80;
 
 /// Interrogative words that commonly start questions.
 const INTERROGATIVE_STARTERS: &[&str] = &[
@@ -248,7 +248,7 @@ fn question_confidence(text: &str) -> f64 {
 
 fn should_emit_candidate(text: &str) -> bool {
     let trimmed = text.trim_end();
-    if trimmed.ends_with(['?', '!', '.']) {
+    if trimmed.ends_with('?') || trimmed.ends_with('!') || trimmed.ends_with('.') {
         return true;
     }
 
