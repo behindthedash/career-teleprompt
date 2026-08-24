@@ -152,7 +152,7 @@ export function TeleprompterPanel() {
         <div className="flex shrink-0 items-center justify-between border-b border-border/20 px-4 py-2">
           <div className="flex items-center gap-2">
             <FileText className="h-3.5 w-3.5 text-primary/80" aria-hidden="true" />
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Teleprompter Script
             </h2>
           </div>
@@ -171,7 +171,7 @@ export function TeleprompterPanel() {
               setDraftSourceUri(null);
             }}
             placeholder="Paste a prepared answer, elevator pitch, or interview notes here..."
-            className="min-h-0 flex-1 resize-none rounded-xl border border-border/30 bg-background/25 p-4 text-sm leading-relaxed text-foreground/90 outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary/40"
+            className="min-h-0 flex-1 resize-none rounded-xl border border-border/30 bg-background/25 p-4 text-sm leading-relaxed text-foreground/90 outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/40"
           />
           {error && (
             <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -179,7 +179,7 @@ export function TeleprompterPanel() {
             </div>
           )}
           <div className="flex shrink-0 items-center justify-between gap-3">
-            <span className="text-[10px] text-muted-foreground/45">
+            <span className="text-[10px] text-muted-foreground">
               Speech following starts when the script is loaded. Page Up / Page Down is a manual override.
             </span>
             <div className="flex items-center gap-2">
@@ -228,28 +228,28 @@ export function TeleprompterPanel() {
           : "Lost"
     : "Paused";
   const statusClass = !followingEnabled
-    ? "bg-muted/20 text-muted-foreground/55"
+    ? "bg-muted/20 text-muted-foreground"
     : followerStatus === "lost"
-      ? "bg-destructive/10 text-destructive/80"
+      ? "bg-destructive/10 text-destructive"
       : followerStatus === "uncertain"
-        ? "bg-warning/10 text-warning/80"
-        : "bg-success/10 text-success/80";
+        ? "bg-warning/10 text-warning"
+        : "bg-success/10 text-success";
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-card/20">
       <div className="flex shrink-0 items-center justify-between border-b border-border/20 px-3 py-1.5">
         <div className="flex items-center gap-2">
           <FileText className="h-3.5 w-3.5 text-primary/80" aria-hidden="true" />
-          <h2 className="text-meta font-semibold uppercase tracking-wider text-muted-foreground/60">
+          <h2 className="text-meta font-semibold uppercase tracking-wider text-muted-foreground">
             Teleprompter
           </h2>
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-medium text-primary/80">
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-medium text-primary">
             {document.origin === "generated" ? "AI answer" : "Prepared"}
           </span>
           {document.origin === "generated" && (
             <button
               onClick={saveCurrentAsPrepared}
-              className="rounded-full border border-primary/15 bg-primary/5 px-2 py-0.5 text-[9px] font-medium text-primary/75 transition-colors hover:bg-primary/15 hover:text-primary"
+              className="rounded-full border border-primary/15 bg-primary/5 px-2 py-0.5 text-[9px] font-medium text-primary transition-colors hover:bg-primary/15"
               title="Keep this AI answer as prepared teleprompter content without changing your reading position"
             >
               Save as Prepared
@@ -264,7 +264,7 @@ export function TeleprompterPanel() {
             {followingEnabled && followerConfidence > 0 ? ` ${Math.round(followerConfidence * 100)}%` : ""}
           </button>
           {sections.length > 1 && (
-            <span className="text-[10px] tabular-nums text-muted-foreground/45">
+            <span className="text-[10px] tabular-nums text-muted-foreground">
               {activeSectionIndex + 1}/{sections.length}
             </span>
           )}
@@ -274,7 +274,7 @@ export function TeleprompterPanel() {
           <ReaderButton onClick={decreaseFontSize} title="Smaller text">
             <Minus className="h-3.5 w-3.5" />
           </ReaderButton>
-          <span className="w-8 text-center text-[10px] tabular-nums text-muted-foreground/55">{fontSize}</span>
+          <span className="w-8 text-center text-[10px] tabular-nums text-muted-foreground">{fontSize}</span>
           <ReaderButton onClick={increaseFontSize} title="Larger text">
             <Plus className="h-3.5 w-3.5" />
           </ReaderButton>
@@ -303,7 +303,7 @@ export function TeleprompterPanel() {
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-primary/15 bg-primary/5 px-3 py-1.5">
           <div className="flex min-w-0 items-center gap-2">
             <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary/70" aria-hidden="true" />
-            <span className="truncate text-[10px] font-medium text-primary/80">
+            <span className="truncate text-[10px] font-medium text-primary">
               New interview answer ready — your current reading position is unchanged.
             </span>
           </div>
@@ -317,7 +317,7 @@ export function TeleprompterPanel() {
             </button>
             <button
               onClick={dismissPendingDocument}
-              className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:bg-accent/50 hover:text-foreground"
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
               title="Dismiss new answer"
               aria-label="Dismiss new answer"
             >
@@ -339,8 +339,8 @@ export function TeleprompterPanel() {
         <div
           ref={scrollRef}
           tabIndex={0}
-          aria-label="Teleprompter script"
-          className="h-full overflow-y-auto overscroll-contain px-[8%] scroll-smooth"
+          aria-label="Teleprompter reading content"
+          className="h-full overflow-y-auto overscroll-contain px-[8%] scroll-smooth focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40"
         >
           <div className="h-[42%] min-h-16" aria-hidden="true" />
           <div className="mx-auto max-w-4xl space-y-16">
@@ -354,12 +354,12 @@ export function TeleprompterPanel() {
                   key={displaySection.section.id}
                   onClick={() => setActiveSection(sectionIndex)}
                   className={`cursor-pointer whitespace-pre-wrap transition-opacity duration-200 ${
-                    active ? "opacity-100" : "opacity-35 hover:opacity-55"
+                    active ? "opacity-100" : "opacity-80 hover:opacity-100"
                   }`}
                   style={{ fontSize: `${fontSize}px`, lineHeight }}
                 >
                   {displaySection.section.title && (
-                    <div className="mb-3 text-[0.42em] font-semibold uppercase tracking-[0.16em] text-primary/60">
+                    <div className="mb-3 text-[0.42em] font-semibold uppercase tracking-[0.16em] text-primary">
                       {displaySection.section.title}
                     </div>
                   )}
@@ -371,10 +371,10 @@ export function TeleprompterPanel() {
                     }
                     const className =
                       state === "completed"
-                        ? "text-foreground/20 transition-colors duration-200"
+                        ? "text-muted-foreground transition-colors duration-200"
                         : state === "current"
                           ? "font-medium text-foreground transition-colors duration-150"
-                          : "text-foreground/65 transition-colors duration-200";
+                          : "text-foreground/75 transition-colors duration-200";
                     return (
                       <span
                         key={`${piece.tokenStart}-${pieceIndex}`}
@@ -402,7 +402,7 @@ export function TeleprompterPanel() {
           <ChevronUp className="h-3.5 w-3.5" />
           Previous
         </button>
-        <span className="text-[10px] text-muted-foreground/40">
+        <span className="text-[10px] text-muted-foreground">
           {followingEnabled
             ? followerStatus === "uncertain" || followerStatus === "lost"
               ? "Holding position — keep speaking or use manual navigation"
@@ -434,7 +434,7 @@ function ReaderButton({
   return (
     <button
       onClick={onClick}
-      className="rounded-md p-1.5 text-muted-foreground/55 transition-colors hover:bg-accent/60 hover:text-foreground"
+      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
       title={title}
       aria-label={title}
     >
@@ -456,7 +456,7 @@ function FormatButton({
     <button
       onClick={onClick}
       className={`px-2 py-1 text-[10px] font-medium transition-colors ${
-        active ? "bg-primary/15 text-primary" : "text-muted-foreground/50 hover:text-foreground"
+        active ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"
       }`}
     >
       {children}
