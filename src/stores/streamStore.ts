@@ -134,7 +134,6 @@ export const useStreamStore = create<StreamState>((set, get) => ({
 
   unpinResponse: (id) =>
     set((state) => ({
-      pinnedResponses: state.pinnedResponses.filter((r) => r.id !== id,
-      ),
+      pinnedResponses: state.pinnedResponses.filter((r) => r.id !== id),
     })),
 }));

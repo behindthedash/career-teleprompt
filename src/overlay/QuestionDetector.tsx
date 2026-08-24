@@ -1,21 +1,10 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { HelpCircle, Sparkles, Check, Clock, X } from "lucide-react";
 import { onQuestionDetected } from "../lib/events";
 import { generateAssist } from "../lib/ipc";
-import { useTranscriptStore } from "../stores/transcriptStore";
+import { useConfigStore } from "../stores/configStore";
+import { useStreamStore } from "../stores/streamStore";
 import type { DetectedQuestion } from "../lib/types";
-
-function looksLikeQuestion(text: string): boolean {
-  const trimmed = text.trim();
-  if (trimmed.endsWith("?")) return true;
-  const lower = trimmed.toLowerCase();
-  const qWords = [
-    "what ", "how ", "why ", "when ", "where ", "who ", "which ",
-    "can you", "could you", "would you", "do you", "are you",
-    "is there", "have you", "tell me", "explain",
-  ];
-  return qWords.some((w) => lower.startsWith(w));
-}
 
 interface TrackedQuestion extends DetectedQuestion {
   assisted: boolean;
@@ -23,8 +12,6 @@ interface TrackedQuestion extends DetectedQuestion {
 
 export function QuestionDetector() {
   const [questions, setQuestions] = useState<TrackedQuestion[]>([]);
-  const processedIdsRef = useRef<Set<string>>(new Set());
-  const segments = useTranscriptStore((s) => s.segments);
 
   const addQuestion = useCallback((q: DetectedQuestion) => {
     setQuestions((prev) => {
@@ -33,32 +20,52 @@ export function QuestionDetector() {
     });
   }, []);
 
+  const setAssisted = useCallback((q: DetectedQuestion, assisted: boolean) => {
+    setQuestions((prev) =>
+      prev.map((item) =>
+        item.timestamp_ms === q.timestamp_ms && item.text === q.text
+          ? { ...item, assisted }
+          : item,
+      ),
+    );
+  }, []);
+
+  const requestWhatToSay = useCallback(
+    (q: DetectedQuestion) => {
+      if (useStreamStore.getState().isStreaming) return false;
+
+      setAssisted(q, true);
+      generateAssist("WhatToSay", q.text).catch(() => setAssisted(q, false));
+      return true;
+    },
+    [setAssisted],
+  );
+
   useEffect(() => {
     const p = onQuestionDetected((event) => {
-      if (event.source === "Them" || event.source === "Interviewer") {
-        addQuestion(event);
+      if (event.source !== "Them" && event.source !== "Interviewer") return;
+
+      // The Rust question detector is authoritative. It already assembles adjacent
+      // interviewer STT finals and suppresses corrected/duplicate questions.
+      addQuestion(event);
+
+      if (useConfigStore.getState().autoTrigger) {
+        requestWhatToSay(event);
       }
     });
-    return () => { p.then((u) => u()); };
-  }, [addQuestion]);
+    return () => {
+      p.then((u) => u());
+    };
+  }, [addQuestion, requestWhatToSay]);
 
-  useEffect(() => {
-    for (const seg of segments) {
-      if (seg.is_final && !processedIdsRef.current.has(seg.id) && (seg.speaker === "Them" || seg.speaker === "Interviewer") && looksLikeQuestion(seg.text)) {
-        processedIdsRef.current.add(seg.id);
-        addQuestion({ text: seg.text, confidence: 0.8, timestamp_ms: seg.timestamp_ms, source: seg.speaker });
-      }
-      if (seg.is_final) processedIdsRef.current.add(seg.id);
-    }
-  }, [segments, addQuestion]);
-
-  const handleAssist = useCallback((index: number) => {
-    const questionText = questions[index]?.text;
-    setQuestions((prev) =>
-      prev.map((q, i) => i === index ? { ...q, assisted: true } : q)
-    );
-    generateAssist("Assist", questionText).catch(() => {});
-  }, [questions]);
+  const handleAssist = useCallback(
+    (index: number) => {
+      const question = questions[index];
+      if (!question || question.assisted) return;
+      requestWhatToSay(question);
+    },
+    [questions, requestWhatToSay],
+  );
 
   const handleDismiss = useCallback((index: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -70,16 +77,20 @@ export function QuestionDetector() {
 
   return (
     <div className="flex flex-col gap-2.5" role="region" aria-label="Detected questions">
-      {/* Latest question — prominent card */}
       <div
         className={`group flex items-start gap-3 rounded-lg transition-all duration-200 ${
           latest ? "cursor-pointer hover:bg-info/10 question-card-enter" : ""
         }`}
-        onClick={() => latest && handleAssist(0)}
-        onKeyDown={(e) => { if (latest && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); handleAssist(0); } }}
+        onClick={() => latest && !latest.assisted && handleAssist(0)}
+        onKeyDown={(e) => {
+          if (latest && !latest.assisted && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            handleAssist(0);
+          }
+        }}
         role={latest ? "button" : undefined}
         tabIndex={latest ? 0 : undefined}
-        aria-label={latest ? `Question: ${latest.text}. ${latest.assisted ? "Answered" : "Click to assist"}` : undefined}
+        aria-label={latest ? `Question: ${latest.text}. ${latest.assisted ? "Answer requested" : "Click for What to Say"}` : undefined}
       >
         <div className="relative mt-0.5 shrink-0" aria-hidden="true">
           <HelpCircle className={`h-5 w-5 transition-colors ${latest ? "text-info" : "text-muted-foreground/50"}`} />
@@ -108,8 +119,11 @@ export function QuestionDetector() {
         {latest && (
           <div className="flex shrink-0 items-center gap-1">
             <button
-              onClick={(e) => { e.stopPropagation(); handleAssist(0); }}
-              aria-label={latest.assisted ? "Already answered" : "Get AI assistance for this question"}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!latest.assisted) handleAssist(0);
+              }}
+              aria-label={latest.assisted ? "What to Say requested" : "Get What to Say for this question"}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-150 cursor-pointer ${
                 latest.assisted
                   ? "bg-success/10 border border-success/20 text-success"
@@ -117,9 +131,9 @@ export function QuestionDetector() {
               }`}
             >
               {latest.assisted ? (
-                <><Check className="h-3.5 w-3.5" aria-hidden="true" />Answered</>
+                <><Check className="h-3.5 w-3.5" aria-hidden="true" />Requested</>
               ) : (
-                <><Sparkles className="h-3.5 w-3.5" aria-hidden="true" />Assist</>
+                <><Sparkles className="h-3.5 w-3.5" aria-hidden="true" />What to Say</>
               )}
             </button>
             <button
@@ -133,7 +147,6 @@ export function QuestionDetector() {
         )}
       </div>
 
-      {/* Previous questions — compact list */}
       {previousQuestions.length > 0 && (
         <div className="flex flex-col gap-1">
           {previousQuestions.map((q, idx) => {
@@ -149,7 +162,12 @@ export function QuestionDetector() {
                 onClick={() => !q.assisted && handleAssist(realIdx)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleAssist(realIdx); } }}
+                onKeyDown={(e) => {
+                  if (!q.assisted && (e.key === "Enter" || e.key === " ")) {
+                    e.preventDefault();
+                    handleAssist(realIdx);
+                  }
+                }}
                 title={q.text}
               >
                 <div className="shrink-0">
