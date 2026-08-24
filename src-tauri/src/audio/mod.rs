@@ -178,7 +178,10 @@ impl AudioCaptureManager {
             }
         }
 
-        // Start system audio capture (only if not already handled by same-device path)
+        // Start system audio capture (only if not already handled by same-device path).
+        // Both sides are required for the live-interview contract. If the second
+        // source cannot start, tear the first source down before returning so the
+        // caller never inherits a half-open capture session.
         if same_device {
             // Already handled above — both Mic and System chunks from single stream
         } else if system_is_input && !system_device_id.is_empty() && system_device_id != "default" {
@@ -190,10 +193,10 @@ impl AudioCaptureManager {
                     log::info!("System audio capture started via input device (tagged as System)");
                 }
                 Err(e) => {
-                    log::error!(
-                        "Failed to start system input capture: {}. System audio will not be captured.",
-                        e
-                    );
+                    log::error!("Failed to start system input capture: {}", e);
+                    self.mic_stream.take();
+                    self.stop_flag.store(true, Ordering::SeqCst);
+                    return Err(format!("System input capture failed: {}", e));
                 }
             }
         } else {
@@ -211,10 +214,11 @@ impl AudioCaptureManager {
                     log::info!("System audio capture started via WASAPI loopback");
                 }
                 Err(e) => {
-                    log::error!(
-                        "WASAPI loopback failed: {}. System audio (remote party) will not be captured.",
-                        e
-                    );
+                    log::error!("WASAPI loopback failed: {}", e);
+                    self.mic_stream.take();
+                    self.system_input_stream.take();
+                    self.stop_flag.store(true, Ordering::SeqCst);
+                    return Err(format!("System audio capture failed: {}", e));
                 }
             }
         }
@@ -247,9 +251,8 @@ impl AudioCaptureManager {
         // Drop system input stream (if using input device capture for "Them")
         self.system_input_stream.take();
 
-        // Wait for system capture thread to finish (with timeout)
+        // Wait for system capture thread to finish
         if let Some(thread) = self.system_thread.take() {
-            // Give the thread a moment to stop, then move on
             let _ = thread.join();
         }
 
