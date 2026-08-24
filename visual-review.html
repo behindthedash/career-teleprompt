@@ -9,7 +9,50 @@
       // The production app never loads this HTML entry point.
       (() => {
         let callbackId = 1;
-        const emptyArrayCommands = /(list|devices|models|meetings|history|providers|bookmarks|items|speakers|catalog|engines|scenarios)/i;
+        let listenerId = 1;
+
+        const json = (value) => JSON.stringify(value);
+        const audioDevices = {
+          inputs: [
+            { id: "default-mic", name: "Default Microphone", is_input: true, is_default: true },
+            { id: "headset-mic", name: "USB Headset Microphone", is_input: true, is_default: false },
+          ],
+          outputs: [
+            { id: "default-output", name: "Default Speakers", is_input: false, is_default: true },
+            { id: "headset-output", name: "USB Headset", is_input: false, is_default: false },
+          ],
+        };
+
+        const jsonResults = {
+          list_audio_devices: json(audioDevices),
+          get_audio_sessions: json([]),
+          list_local_stt_engines: json([]),
+          get_available_stt_providers: json(["windows_native", "deepgram", "groq_whisper"]),
+          list_models: json([]),
+          get_llm_providers: json(["ollama", "openrouter", "openai", "anthropic"]),
+          list_openrouter_models: json([]),
+          list_context_resources: json([]),
+          list_meetings: json([]),
+          search_meetings: json([]),
+          list_opus_mt_models: json([]),
+          get_audio_sessions: json([]),
+          get_token_budget: json({ used: 0, available: 8192, total: 8192 }),
+          get_rag_status: json({ ready: false, document_count: 0, chunk_count: 0 }),
+          get_rag_config: json({ enabled: false, embedding_provider: "ollama", embedding_model: "nomic-embed-text", top_k: 5 }),
+          test_rag_search: json([]),
+          test_ollama_embedding_connection: json({ connected: false, model_available: false }),
+          get_mute_status: json({ you: false, them: false }),
+          ensure_ipolicy_override: json({ active: false, was_drifted: false }),
+          estimate_deepgram_cost: json({ cost_usd: 0, streams: 2, rate_per_min: 0 }),
+        };
+
+        const directArrayCommands = new Set([
+          "get_audio_peak_levels",
+          "get_translation_languages",
+          "get_meeting_translations",
+          "get_all_meeting_translations",
+        ]);
+
         const falseCommands = /(^|_)(is|has|check|running|available|enabled)(_|$)/i;
 
         window.__TAURI_INTERNALS__ = {
@@ -18,15 +61,20 @@
             currentWebview: { label: "launcher" },
           },
           invoke: async (command) => {
-            if (emptyArrayCommands.test(command)) return [];
+            if (command in jsonResults) return jsonResults[command];
+            if (directArrayCommands.has(command)) return [];
+            if (command === "plugin:event|listen") return listenerId++;
+            if (command === "plugin:event|unlisten") return null;
             if (falseCommands.test(command)) return false;
             if (/version/i.test(command)) return "visual-review";
             if (/get_api_key/i.test(command)) return null;
+            if (/get_pause_threshold/i.test(command)) return 3000;
             if (/get_/i.test(command)) return null;
             return null;
           },
           transformCallback: () => callbackId++,
           unregisterCallback: () => {},
+          unregisterListener: () => {},
           convertFileSrc: (path) => path,
         };
       })();
