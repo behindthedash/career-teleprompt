@@ -18,7 +18,7 @@ async function screenshot(page, name) {
 }
 
 async function openKnowledgeBase(page) {
-  await page.getByRole("heading", { name: "NexQ" }).waitFor();
+  await page.getByRole("heading", { name: "Career Teleprompt" }).waitFor();
   await page.getByRole("button", { name: "Test Knowledge Base", exact: true }).click();
   await page.getByRole("heading", { name: "Test Knowledge Base" }).waitFor();
 }
@@ -91,7 +91,7 @@ try {
   });
 
   await runScenario("capture-error", "capture-error", async (page) => {
-    await page.getByRole("heading", { name: "NexQ" }).waitFor();
+    await page.getByRole("heading", { name: "Career Teleprompt" }).waitFor();
     await startInterview(page);
     await page.getByText("CI Interview", { exact: true }).first().waitFor();
     const state = await page.evaluate(() => window.__CAREER_TELEPROMPT_WORKFLOW__?.state());
@@ -103,7 +103,7 @@ try {
       throw new Error("capture failure path was not exercised");
     }
     await page.getByRole("button", { name: "End meeting", exact: true }).click();
-    await page.getByRole("heading", { name: "NexQ" }).waitFor();
+    await page.getByRole("heading", { name: "Career Teleprompt" }).waitFor();
   });
 } catch (caught) {
   failure = caught instanceof Error ? caught : new Error(String(caught));
