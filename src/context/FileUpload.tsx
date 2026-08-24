@@ -95,7 +95,8 @@ export function FileUpload() {
 
   return (
     <div className="w-full">
-      {/* Drop zone */}
+      {/* One interactive drop/browse target. Avoid nesting a button inside another
+          keyboard-focusable control, which creates ambiguous focus semantics. */}
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -109,8 +110,8 @@ export function FileUpload() {
         }}
         role="button"
         tabIndex={0}
-        aria-label="Drop files here or click to browse"
-        className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed transition-all duration-200 ${
+        aria-label="Upload context files"
+        className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
           isDragOver
             ? "border-primary/60 bg-primary/5 scale-[1.01]"
             : "border-muted-foreground/20 bg-secondary/20 hover:border-muted-foreground/30 hover:bg-secondary/30"
@@ -118,7 +119,7 @@ export function FileUpload() {
       >
         {isProcessing ? (
           <>
-            <Loader2 className="mb-2 h-8 w-8 animate-spin text-primary/60" />
+            <Loader2 className="mb-2 h-8 w-8 animate-spin text-primary/60" aria-hidden="true" />
             <p className="text-sm font-medium text-muted-foreground">
               Processing file...
             </p>
@@ -129,6 +130,7 @@ export function FileUpload() {
               className={`mb-2 h-8 w-8 transition-colors duration-200 ${
                 isDragOver ? "text-primary" : "text-primary/30"
               }`}
+              aria-hidden="true"
             />
             <p className="text-sm font-medium text-muted-foreground">
               {isDragOver ? "Drop to upload" : "Drag files here"}
@@ -136,12 +138,12 @@ export function FileUpload() {
             <p className="mt-1 text-xs text-muted-foreground">
               PDF, TXT, Markdown, or DOCX
             </p>
-            <button
-              onClick={handleBrowse}
-              className="mt-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 hover:text-primary"
+            <span
+              className="mt-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-medium text-primary transition-colors group-hover:bg-primary/10"
+              aria-hidden="true"
             >
               Browse Files
-            </button>
+            </span>
           </>
         )}
       </div>
