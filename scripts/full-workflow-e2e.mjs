@@ -114,14 +114,14 @@ try {
   assert(generationCall.args?.mode === "WhatToSay", "Say did not use the WhatToSay generation mode");
   const serializedTranscript = String(generationCall.args?.transcriptSegments ?? "");
   assert(serializedTranscript.includes("reliable real-time data pipeline"), "generate_assist did not receive the live transcript");
-  await checkpoint("what-to-say-answer");
 
-  // Send the completed AI answer into the production teleprompter.
-  await page.getByRole("button", { name: "Prompt this answer" }).click();
+  // Production intentionally auto-hands the first completed WhatToSay response
+  // into an empty teleprompter and switches the overlay to teleprompt mode.
   await page.getByRole("heading", { name: "Teleprompter" }).waitFor();
   let state = await bridgeState();
-  assert(state?.teleprompter.hasDocument, "AI answer was not loaded into the teleprompter");
-  assert(state?.teleprompter.origin === "generated", "Teleprompter answer was not marked generated");
+  assert(state?.teleprompter.hasDocument, "WhatToSay answer did not auto-load into the teleprompter");
+  assert(state?.teleprompter.origin === "generated", "Auto-loaded teleprompter answer was not marked generated");
+  await checkpoint("what-to-say-auto-handoff");
 
   // Simulate microphone/STT output from the user's speech. This enters through
   // transcript_final and drives the real speech-following hook.
