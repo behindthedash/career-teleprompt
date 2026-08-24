@@ -3,6 +3,8 @@
 
 use futures::StreamExt;
 use serde_json::{json, Value};
+use std::collections::HashSet;
+use std::sync::Mutex;
 use std::time::Instant;
 use tauri::Emitter;
 
@@ -30,6 +32,9 @@ pub struct OpenAICompatConfig {
 pub struct OpenAICompatClient {
     config: OpenAICompatConfig,
     client: reqwest::Client,
+    /// Models that have explicitly told us they only accept provider-default
+    /// temperature. This avoids paying the failed-request latency on every call.
+    default_temperature_models: Mutex<HashSet<String>>,
 }
 
 /// OpenAI-compatible APIs commonly return a structured 400 when a model only
@@ -73,7 +78,11 @@ fn is_unsupported_temperature_error(status: reqwest::StatusCode, response_body: 
 impl OpenAICompatClient {
     pub fn new(config: OpenAICompatConfig) -> Self {
         let client = reqwest::Client::new();
-        Self { config, client }
+        Self {
+            config,
+            client,
+            default_temperature_models: Mutex::new(HashSet::new()),
+        }
     }
 
     /// Build a request with auth headers applied.
@@ -86,6 +95,19 @@ impl OpenAICompatClient {
             builder = builder.header(key.as_str(), val.as_str());
         }
         builder
+    }
+
+    fn model_accepts_custom_temperature(&self, model: &str) -> bool {
+        self.default_temperature_models
+            .lock()
+            .map(|models| !models.contains(model))
+            .unwrap_or(true)
+    }
+
+    fn remember_default_temperature_model(&self, model: &str) {
+        if let Ok(mut models) = self.default_temperature_models.lock() {
+            models.insert(model.to_string());
+        }
     }
 
     async fn send_completion_request(
@@ -204,13 +226,15 @@ impl LLMProvider for OpenAICompatClient {
         };
 
         let mut body = json!({
-            "model": model_id,
+            "model": model_id.clone(),
             "messages": msgs,
             "stream": true
         });
 
         if let Some(temp) = params.temperature {
-            body["temperature"] = json!(temp);
+            if self.model_accepts_custom_temperature(&model_id) {
+                body["temperature"] = json!(temp);
+            }
         }
         if let Some(max_tok) = params.max_tokens {
             body["max_tokens"] = json!(max_tok);
@@ -235,6 +259,7 @@ impl LLMProvider for OpenAICompatClient {
             if body.get("temperature").is_some()
                 && is_unsupported_temperature_error(status, &response_body)
             {
+                self.remember_default_temperature_model(&model_id);
                 if let Some(object) = body.as_object_mut() {
                     object.remove("temperature");
                 }
