@@ -212,7 +212,10 @@ export async function invoke<T>(
     case "list_local_stt_engines":
       return JSON.stringify([]) as T;
     case "has_api_key":
-      return false as T;
+      // The workflow harness models a provisioned Deepgram interviewer path so
+      // production readiness checks pass before exercising meeting/capture E2E.
+      // Other providers remain unconfigured unless a scenario explicitly adds them.
+      return (args?.provider === "deepgram") as T;
     case "get_api_key":
       return null as T;
     case "get_custom_instructions":

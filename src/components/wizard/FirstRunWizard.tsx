@@ -33,6 +33,7 @@ export function FirstRunWizard({ initialStep = 0 }: FirstRunWizardProps = {}) {
   const safeInitialStep = Math.min(Math.max(initialStep, 0), STEP_COUNT - 1);
   const [currentStep, setCurrentStep] = useState(safeInitialStep);
   const [detectionComplete, setDetectionComplete] = useState(false);
+  const [sttReady, setSttReady] = useState(false);
   const [slideDirection, setSlideDirection] = useState<"left" | "right">("right");
   const [isAnimating, setIsAnimating] = useState(false);
 
@@ -71,7 +72,7 @@ export function FirstRunWizard({ initialStep = 0 }: FirstRunWizardProps = {}) {
   }, [currentStep, animateToStep]);
 
   const handleSkip = useCallback(() => {
-    // Skip to the final step
+    // Only the LLM step is optional. Audio + interviewer STT are core runtime dependencies.
     animateToStep(STEP_COUNT - 1);
   }, [animateToStep]);
 
@@ -95,9 +96,10 @@ export function FirstRunWizard({ initialStep = 0 }: FirstRunWizardProps = {}) {
   );
 
   const handleStartMeeting = useCallback(async () => {
-    setFirstRunCompleted(true);
     try {
       await startMeetingFlow();
+      // Do not mark onboarding complete until the required interview runtime starts.
+      setFirstRunCompleted(true);
     } catch (err) {
       console.error("[FirstRunWizard] Failed to start meeting:", err);
     }
@@ -116,9 +118,14 @@ export function FirstRunWizard({ initialStep = 0 }: FirstRunWizardProps = {}) {
     }, 100);
   }, [setFirstRunCompleted, setSettingsOpen]);
 
-  // Can proceed from step 0 only after detection is complete
+  // Welcome requires detection; STT requires an actually provisioned live
+  // interviewer transcription provider. Other steps can proceed normally.
   const canNext =
-    currentStep === 0 ? detectionComplete : currentStep < STEP_COUNT - 1;
+    currentStep === 0
+      ? detectionComplete
+      : currentStep === 2
+        ? sttReady
+        : currentStep < STEP_COUNT - 1;
 
   return (
     <main className="flex h-full flex-col bg-background" aria-labelledby="setup-wizard-heading">
@@ -139,7 +146,7 @@ export function FirstRunWizard({ initialStep = 0 }: FirstRunWizardProps = {}) {
             <button
               key={i}
               onClick={() => {
-                // Only allow clicking completed steps or the current step
+                // Only allow clicking completed steps or the next ready step.
                 if (i <= currentStep || (i === currentStep + 1 && canNext)) {
                   animateToStep(i);
                 }
@@ -183,7 +190,9 @@ export function FirstRunWizard({ initialStep = 0 }: FirstRunWizardProps = {}) {
               <WelcomeStep onDetectionComplete={handleDetectionComplete} />
             )}
             {currentStep === 1 && <AudioSetupStep />}
-            {currentStep === 2 && <STTSetupStep />}
+            {currentStep === 2 && (
+              <STTSetupStep onReadinessChange={setSttReady} />
+            )}
             {currentStep === 3 && (
               <LLMSetupStep
                 ollamaRunning={detection.ollamaRunning}
@@ -218,8 +227,8 @@ export function FirstRunWizard({ initialStep = 0 }: FirstRunWizardProps = {}) {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Skip button — available on steps 1-2 */}
-          {currentStep > 0 && currentStep < STEP_COUNT - 1 && (
+          {/* LLM setup may be skipped; audio and STT may not. */}
+          {currentStep === 3 && (
             <button
               onClick={handleSkip}
               className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
