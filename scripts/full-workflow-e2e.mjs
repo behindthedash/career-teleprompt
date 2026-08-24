@@ -40,7 +40,7 @@ async function bridgeState() {
 let failure = null;
 try {
   await page.goto(`${baseUrl}/workflow-review.html`, { waitUntil: "networkidle" });
-  await page.getByRole("heading", { name: "NexQ" }).waitFor();
+  await page.getByRole("heading", { name: "Career Teleprompt" }).waitFor();
   await checkpoint("launcher");
 
   // RAG search + streamed answer through the real Knowledge Base dialog.
@@ -163,7 +163,7 @@ try {
   await endButton.waitFor({ state: "visible" });
   await endButton.click();
   await page.waitForFunction(() => window.__CAREER_TELEPROMPT_WORKFLOW__?.state().view === "launcher");
-  await page.getByRole("heading", { name: "NexQ" }).waitFor();
+  await page.getByRole("heading", { name: "Career Teleprompt" }).waitFor();
   await checkpoint("meeting-ended");
 } catch (error) {
   failure = error instanceof Error ? error : new Error(String(error));
