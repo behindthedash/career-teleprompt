@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
+import { readTextFile } from "@tauri-apps/plugin-fs";
 import {
   ChevronDown,
   ChevronUp,
   FileText,
+  FolderOpen,
   Minus,
   Pencil,
   Plus,
@@ -18,6 +21,10 @@ import {
   findReadingPieceIndex,
   pieceReadingState,
 } from "../teleprompter/display";
+import {
+  inferTeleprompterFormatFromPath,
+  preparedFileSourceUri,
+} from "../teleprompter/fileImport";
 
 export function TeleprompterPanel() {
   useTeleprompterFollower();
@@ -51,6 +58,7 @@ export function TeleprompterPanel() {
   const dismissPendingDocument = useTeleprompterStore((state) => state.dismissPendingDocument);
 
   const [format, setFormat] = useState<TeleprompterFormat>("text");
+  const [draftSourceUri, setDraftSourceUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const readingPieceRef = useRef<HTMLSpanElement | null>(null);
@@ -100,10 +108,41 @@ export function TeleprompterPanel() {
 
   const applyDraft = () => {
     try {
-      setPreparedText(draftText, format);
+      setPreparedText(
+        draftText,
+        format,
+        draftSourceUri ?? "prepared://overlay",
+      );
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't load teleprompter script");
+    }
+  };
+
+  const openPreparedFile = async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [
+          {
+            name: "Teleprompter Scripts",
+            extensions: ["txt", "md", "markdown"],
+          },
+        ],
+      });
+      if (!selected || Array.isArray(selected)) return;
+
+      const text = await readTextFile(selected);
+      if (!text.trim()) {
+        throw new Error("Selected teleprompter script is empty");
+      }
+
+      setDraftText(text);
+      setFormat(inferTeleprompterFormatFromPath(selected));
+      setDraftSourceUri(preparedFileSourceUri(selected));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't open teleprompter script");
     }
   };
 
@@ -118,8 +157,8 @@ export function TeleprompterPanel() {
             </span>
           </div>
           <div className="flex overflow-hidden rounded-md border border-border/30">
-            <FormatButton active={format === "text"} onClick={() => setFormat("text")}>Text</FormatButton>
-            <FormatButton active={format === "markdown"} onClick={() => setFormat("markdown")}>Markdown</FormatButton>
+            <FormatButton active={format === "text"} onClick={() => { setFormat("text"); setDraftSourceUri(null); }}>Text</FormatButton>
+            <FormatButton active={format === "markdown"} onClick={() => { setFormat("markdown"); setDraftSourceUri(null); }}>Markdown</FormatButton>
           </div>
         </div>
 
@@ -127,7 +166,10 @@ export function TeleprompterPanel() {
           <textarea
             autoFocus
             value={draftText}
-            onChange={(event) => setDraftText(event.target.value)}
+            onChange={(event) => {
+              setDraftText(event.target.value);
+              setDraftSourceUri(null);
+            }}
             placeholder="Paste a prepared answer, elevator pitch, or interview notes here..."
             className="min-h-0 flex-1 resize-none rounded-xl border border-border/30 bg-background/25 p-4 text-sm leading-relaxed text-foreground/90 outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary/40"
           />
@@ -141,6 +183,14 @@ export function TeleprompterPanel() {
               Speech following starts when the script is loaded. Page Up / Page Down is a manual override.
             </span>
             <div className="flex items-center gap-2">
+              <button
+                onClick={openPreparedFile}
+                className="flex items-center gap-1.5 rounded-lg border border-border/30 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+                title="Open a prepared TXT or Markdown teleprompter script"
+              >
+                <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                Open File
+              </button>
               {document && (
                 <button
                   onClick={cancelEditing}
