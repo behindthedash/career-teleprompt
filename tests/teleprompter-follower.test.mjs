@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   alignTranscript,
+  distinctiveAnchorBoost,
   transcriptTokens,
 } from "../.tmp-teleprompter-tests/follower.js";
 
@@ -69,5 +70,44 @@ const correctedPartial = alignTranscript(
   position,
 );
 assert.ok(correctedPartial.position >= position, "an STT correction must remain monotonic");
+
+const uniqueAnchor = transcriptTokens("deterministic human approval gates");
+const uniqueAnchorDocument = transcriptTokens(
+  "start with policy boundaries then use deterministic human approval gates before taking action",
+);
+assert.equal(
+  distinctiveAnchorBoost(uniqueAnchor, uniqueAnchor, uniqueAnchorDocument),
+  0.1,
+  "a unique four-word prepared phrase should receive a strong anchor boost",
+);
+
+const repeatedAnchorDocument = transcriptTokens(
+  "deterministic human approval gates first then deterministic human approval gates again",
+);
+assert.equal(
+  distinctiveAnchorBoost(uniqueAnchor, uniqueAnchor, repeatedAnchorDocument),
+  0,
+  "a repeated phrase must not be treated as a distinctive anchor",
+);
+
+const distantBridge = Array.from({ length: 75 }, (_, index) => `bridge${index}`).join(" ");
+const distantAnchorDocument = transcriptTokens(
+  `opening context ${distantBridge} deterministic human approval gates closing context`,
+);
+const shortAnchorRecovery = alignTranscript(
+  distantAnchorDocument,
+  "deterministic human approval gates",
+  2,
+);
+assert.equal(shortAnchorRecovery.status, "following");
+assert.equal(
+  shortAnchorRecovery.recovered,
+  true,
+  "a unique four-word anchor should recover a deliberate distant jump",
+);
+assert.ok(
+  shortAnchorRecovery.position > 70,
+  "distinctive-anchor recovery should move to the distant prepared phrase",
+);
 
 console.log("teleprompter follower tests: PASS");
