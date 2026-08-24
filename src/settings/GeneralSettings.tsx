@@ -160,6 +160,7 @@ export function GeneralSettings() {
           step={0.01}
           value={overlayOpacity}
           onChange={(e) => setOverlayOpacity(parseFloat(e.target.value))}
+          aria-label="Overlay transparency"
           aria-valuetext={`${Math.round(overlayOpacity * 100)} percent`}
           className="w-full h-1.5 rounded-full appearance-none bg-secondary cursor-pointer accent-primary"
         />
