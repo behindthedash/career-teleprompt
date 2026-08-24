@@ -23,7 +23,15 @@ function Get-AppUninstallEntry {
 
     foreach ($root in $registryRoots) {
         $match = Get-ItemProperty $root -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -eq $Name -or $_.DisplayName -like "$Name *" } |
+            Where-Object {
+                $displayNameProperty = $_.PSObject.Properties["DisplayName"]
+                if (-not $displayNameProperty) {
+                    return $false
+                }
+
+                $candidateName = [string]$displayNameProperty.Value
+                return $candidateName -eq $Name -or $candidateName -like "$Name *"
+            } |
             Select-Object -First 1
         if ($match) {
             return $match
