@@ -151,10 +151,10 @@ export function TeleprompterPanel() {
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-card/20">
         <div className="flex shrink-0 items-center justify-between border-b border-border/20 px-4 py-2">
           <div className="flex items-center gap-2">
-            <FileText className="h-3.5 w-3.5 text-primary/80" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+            <FileText className="h-3.5 w-3.5 text-primary/80" aria-hidden="true" />
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
               Teleprompter Script
-            </span>
+            </h2>
           </div>
           <div className="flex overflow-hidden rounded-md border border-border/30">
             <FormatButton active={format === "text"} onClick={() => { setFormat("text"); setDraftSourceUri(null); }}>Text</FormatButton>
@@ -239,10 +239,10 @@ export function TeleprompterPanel() {
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-card/20">
       <div className="flex shrink-0 items-center justify-between border-b border-border/20 px-3 py-1.5">
         <div className="flex items-center gap-2">
-          <FileText className="h-3.5 w-3.5 text-primary/80" />
-          <span className="text-meta font-semibold uppercase tracking-wider text-muted-foreground/60">
+          <FileText className="h-3.5 w-3.5 text-primary/80" aria-hidden="true" />
+          <h2 className="text-meta font-semibold uppercase tracking-wider text-muted-foreground/60">
             Teleprompter
-          </span>
+          </h2>
           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-medium text-primary/80">
             {document.origin === "generated" ? "AI answer" : "Prepared"}
           </span>
