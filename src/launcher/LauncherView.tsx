@@ -239,12 +239,16 @@ export function LauncherView() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div
+      className="flex h-full flex-col bg-background"
+      role="main"
+      aria-labelledby="launcher-heading"
+    >
       {/* ═══ HEADER ═══ */}
       <header className="dash-header flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-b border-border/20">
         <div className="flex items-center gap-2.5">
           <img src="/nexq-icon.png" alt="NexQ" className="h-7 w-7 rounded-lg" />
-          <span className="text-sm font-bold tracking-tight text-foreground">NexQ</span>
+          <h1 id="launcher-heading" className="text-sm font-bold tracking-tight text-foreground">NexQ</h1>
         </div>
 
         {/* Active meeting in header */}
