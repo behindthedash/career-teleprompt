@@ -11,6 +11,7 @@ import {
 } from "../lib/ipc";
 import { useConfigStore } from "./configStore";
 import { useTranscriptStore } from "./transcriptStore";
+import { getInterviewerTranscriptionReadiness } from "../interview/interviewerTranscriptionReadiness";
 
 interface MeetingState {
   // View state
@@ -181,6 +182,25 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
         await setRecordingEnabled(config.recordingEnabled);
       } catch { /* non-critical */ }
 
+      // 2b. Online Career Teleprompt depends on real interviewer text. Do not
+      // enter the overlay if the selected system-output provider cannot produce it.
+      if (resolvedMode === "online") {
+        const readiness = await getInterviewerTranscriptionReadiness(
+          config.meetingAudioConfig,
+        );
+        if (!readiness.ready) {
+          const message = `Interviewer transcription is not ready: ${readiness.reason ?? "unknown reason"}`;
+          try {
+            await ipcEndMeeting(meeting.id);
+          } catch (cleanupError) {
+            console.warn("[meetingStore] Failed to close aborted meeting:", cleanupError);
+          }
+          const { showToast } = await import("../stores/toastStore");
+          showToast(message, "error");
+          throw new Error(message);
+        }
+      }
+
       // 3. Start audio capture — use per-party config if available, else legacy
       try {
         if (config.meetingAudioConfig) {
@@ -205,8 +225,20 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
           await startCapture(micId, sysId);
         }
       } catch (err) {
-        console.warn("[meetingStore] Audio capture failed to start:", err);
-        // Continue anyway — meeting is created, user can still use AI features
+        const detail = err instanceof Error ? err.message : String(err);
+        const message = `Audio/transcription failed to start: ${detail}`;
+        console.error("[meetingStore]", message);
+        try {
+          await stopCapture();
+        } catch { /* best-effort cleanup */ }
+        try {
+          await ipcEndMeeting(meeting.id);
+        } catch (cleanupError) {
+          console.warn("[meetingStore] Failed to close aborted meeting:", cleanupError);
+        }
+        const { showToast } = await import("../stores/toastStore");
+        showToast(message, "error");
+        throw new Error(message);
       }
 
       // 3. Clear previous transcript segments and leftover AI state
