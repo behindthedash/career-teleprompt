@@ -1,0 +1,87 @@
+name: Visual UX Review
+
+on:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: visual-ux-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual-review:
+    name: Capture screens and review UX
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Install visual-review tooling
+        run: npm install --no-save --package-lock=false playwright@1.55.0 axe-core@4.10.3
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start visual-review server
+        shell: bash
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 4173 > /tmp/career-teleprompt-vite.log 2>&1 &
+          echo $! > /tmp/career-teleprompt-vite.pid
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:4173/visual-review.html > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/career-teleprompt-vite.log
+          exit 1
+
+      - name: Capture and inspect application screens
+        id: visual_review
+        continue-on-error: true
+        run: node scripts/visual-review.mjs --base-url=http://127.0.0.1:4173
+
+      - name: Upload screenshot and review artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: career-teleprompt-visual-review
+          path: artifacts/visual-review/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Open or refresh UX issues
+        if: >-
+          steps.visual_review.outcome == 'success' &&
+          (github.event_name == 'push' ||
+           github.event_name == 'workflow_dispatch' ||
+           (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/publish-visual-review-issues.mjs
+
+      - name: Surface visual-review execution failures
+        if: steps.visual_review.outcome != 'success'
+        shell: bash
+        run: |
+          echo "Visual review did not complete successfully."
+          cat /tmp/career-teleprompt-vite.log || true
+          exit 1

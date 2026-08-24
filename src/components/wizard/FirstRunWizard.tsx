@@ -18,12 +18,20 @@ interface DetectionData {
   lmStudioModels: string[];
 }
 
-export function FirstRunWizard() {
+interface FirstRunWizardProps {
+  /**
+   * Test/visual-review hook. Production callers omit this and always start at Welcome.
+   */
+  initialStep?: number;
+}
+
+export function FirstRunWizard({ initialStep = 0 }: FirstRunWizardProps = {}) {
   const setFirstRunCompleted = useConfigStore((s) => s.setFirstRunCompleted);
   const startMeetingFlow = useMeetingStore((s) => s.startMeetingFlow);
   const setSettingsOpen = useMeetingStore((s) => s.setSettingsOpen);
 
-  const [currentStep, setCurrentStep] = useState(0);
+  const safeInitialStep = Math.min(Math.max(initialStep, 0), STEP_COUNT - 1);
+  const [currentStep, setCurrentStep] = useState(safeInitialStep);
   const [detectionComplete, setDetectionComplete] = useState(false);
   const [slideDirection, setSlideDirection] = useState<"left" | "right">("right");
   const [isAnimating, setIsAnimating] = useState(false);
