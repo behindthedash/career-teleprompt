@@ -126,7 +126,7 @@ export function FirstRunWizard({ initialStep = 0 }: FirstRunWizardProps = {}) {
       <header className="flex items-center justify-between border-b border-border/20 px-8 py-4">
         <h1 id="setup-wizard-heading" className="flex items-baseline gap-2.5">
           <span className="text-base font-bold tracking-tight text-foreground">
-            NexQ
+            Career Teleprompt
           </span>
           <span className="text-sm text-muted-foreground/60 font-medium">
             Setup
