@@ -7,10 +7,20 @@ assert.match(source, /type QuestionRequestState = "idle" \| "queued" \| "request
 assert.match(source, /type QuestionRequestOrigin = "auto" \| "manual"/);
 assert.match(source, /queuedQuestionRef = useRef<DetectedQuestion \| null>\(null\)/);
 assert.match(source, /queuedOriginRef = useRef<QuestionRequestOrigin \| null>\(null\)/);
-assert.match(source, /if \(useStreamStore\.getState\(\)\.isStreaming\) \{\s*queueLatestQuestion\(q, origin\)/s);
+assert.match(source, /requestInFlightRef = useRef\(false\)/);
+assert.match(source, /const \[requestInFlight, setRequestInFlight\] = useState\(false\)/);
+assert.match(
+  source,
+  /if \(useStreamStore\.getState\(\)\.isStreaming \|\| requestInFlightRef\.current\) \{\s*queueLatestQuestion\(q, origin\)/s,
+);
+assert.match(source, /requestInFlightRef\.current = true;\s*setRequestInFlight\(true\)/s);
+assert.match(
+  source,
+  /generateAssist\("WhatToSay", q\.text\)[\s\S]*?\.finally\(\(\) => \{\s*requestInFlightRef\.current = false;\s*setRequestInFlight\(false\)/,
+);
 assert.match(source, /setRequestState\(previousQueued, "idle"\)/);
-assert.match(source, /Once the current stream finishes, generate only the newest queued question/);
-assert.match(source, /if \(isStreaming\) return;\s*const queued = queuedQuestionRef\.current/s);
+assert.match(source, /Drain only after both the visible stream and the underlying generate_assist/);
+assert.match(source, /if \(isStreaming \|\| requestInFlight\) return;\s*const queued = queuedQuestionRef\.current/s);
 assert.match(source, /requestWhatToSay\(queued, origin\)/);
 assert.match(source, /queuedOriginRef\.current !== "auto"/);
 assert.match(source, /requestWhatToSay\(event, "auto"\)/);
