@@ -16,6 +16,6 @@ assert.match(source, /queuedOriginRef\.current !== "auto"/);
 assert.match(source, /requestWhatToSay\(event, "auto"\)/);
 assert.match(source, /requestWhatToSay\(question, "manual"\)/);
 assert.match(source, /sameQuestion\(queuedQuestionRef\.current, target\)/);
-assert.match(source, />Queued</);
+assert.match(source, /state === "queued" \? "Queued"/);
 
 console.log("latest-question-wins generation queue contract passed");
