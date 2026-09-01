@@ -40,7 +40,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -64,7 +64,7 @@ jobs:
       CAREER_TELEPROMPT_THEM_IS_INPUT: ${{ inputs.them_is_input }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Rust stable
         uses: dtolnay/rust-toolchain@stable
