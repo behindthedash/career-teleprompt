@@ -8,7 +8,7 @@ jobs:
   openspec-validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       # Unpinned @latest: OpenSpec has no stable major yet and this workflow
       # is meant to be a portable drop-in with no repo-local lockfile to keep
