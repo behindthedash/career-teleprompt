@@ -29,6 +29,10 @@ Hearsay SHALL provide a documented Python registration API for transcript handle
 ### Requirement: Events preserve finalized order within a session
 A healthy subscriber SHALL observe events in the same finalized order in which Hearsay drains accepted transcript segments for that session.
 
+#### Scenario: Multiple segments are finalized in sequence
+- **WHEN** several transcript segments are drained for one session in finalized order
+- **THEN** a healthy subscriber receives the corresponding events in that same order with monotonically increasing ordering information
+
 ### Requirement: Recording sessions are isolated
 Each event SHALL belong to exactly one session identity, allocated uniquely per recording session. New sessions SHALL not inherit queued events or relabeled data from prior sessions, and delayed prior-session work SHALL NOT be relabeled as current-session events.
 
@@ -53,5 +57,17 @@ Hearsay SHALL expose delivery/drop/failure diagnostics sufficient to troubleshoo
 ### Requirement: Subscription lifecycle is explicit
 A subscriber SHALL be unregisterable, and session/application teardown SHALL prevent stale queued delivery from appearing as current-session data.
 
+#### Scenario: Subscriber unregisters
+- **WHEN** a consumer unregisters a previously registered handler
+- **THEN** that handler receives no further events
+
+#### Scenario: Session ends with queued deliveries pending
+- **WHEN** a session or the application tears down while a subscriber still has undelivered queued events
+- **THEN** those stale events are not delivered as data belonging to a later session
+
 ### Requirement: No subscribers preserves normal behavior
 When no subscriber is registered, ordinary Hearsay recording/output SHALL continue without additional user configuration.
+
+#### Scenario: Recording with no registered subscriber
+- **WHEN** a recording session starts and no transcript subscriber has been registered
+- **THEN** capture, transcription, live display, and transcript output behave exactly as before without any additional configuration

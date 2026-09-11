@@ -14,8 +14,16 @@ The documented host package surface SHALL be importable without creating UI, ope
 ### Requirement: Public host imports require only Hearsay core dependencies
 The supported import surface SHALL succeed with Hearsay's normal dependency set and SHALL NOT require downstream retrieval, vector, database, or LLM packages.
 
+#### Scenario: Host contracts import in a minimal environment
+- **WHEN** the documented public modules are imported in an environment holding only Hearsay's core dependency set
+- **THEN** the import succeeds without requiring retrieval, vector, database, or LLM packages
+
 ### Requirement: Downstream dependencies remain outside Hearsay packaging
 Standard Hearsay packaging SHALL NOT bundle consumer-specific dependency sets merely because external applications use the host API.
+
+#### Scenario: Hearsay is packaged after a consumer adopts the host API
+- **WHEN** a standard Hearsay build or dependency manifest is produced
+- **THEN** it contains no consumer-specific retrieval, vector, database, or LLM dependencies added on behalf of an external application
 
 ### Requirement: Private internals are outside the supported contract
 External integrations SHALL be possible through documented public modules without reading private transcript queues, tkinter widgets, recorder internals, or Whisper pipeline internals.
@@ -26,3 +34,7 @@ External integrations SHALL be possible through documented public modules withou
 
 ### Requirement: Import behavior is regression-tested externally
 CI SHALL include a subprocess-style smoke test proving the public API imports successfully without application/audio startup side effects.
+
+#### Scenario: CI runs the import smoke test
+- **WHEN** CI executes the public-API import smoke test in a fresh subprocess
+- **THEN** the subprocess exits successfully with no UI, audio device, worker thread, or Whisper model started as an import side effect

@@ -8,6 +8,8 @@ The runtime SHALL decide transcript persistence before writer construction.
 - **THEN** Hearsay does not create a markdown transcript writer/file while live view and transcript events remain available
 
 ### Requirement: Persisted output remains default
+When no live-only policy is selected, existing saved-transcript behavior SHALL remain the default.
+
 #### Scenario: Existing start-recording action is used
 - **WHEN** no live-only policy is explicitly selected
 - **THEN** transcript persistence behaves as before
