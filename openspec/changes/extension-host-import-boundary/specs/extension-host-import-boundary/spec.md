@@ -8,6 +8,8 @@ The documented host package surface SHALL be importable without creating UI, ope
 - **THEN** the import succeeds with no application/audio/model startup side effects
 
 ### Requirement: Private application internals are not part of the supported contract
+External integrations SHALL be possible through documented public modules without reading private transcript queues, tkinter widgets, recorder internals, or Whisper pipeline internals.
+
 #### Scenario: Consumer subscribes correctly
 - **WHEN** a consumer follows integration documentation
 - **THEN** it can register handlers and use supported session configuration without importing private queues, tkinter widgets, recorder internals, or Whisper pipeline internals

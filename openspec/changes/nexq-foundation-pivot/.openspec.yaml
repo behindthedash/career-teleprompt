@@ -1,0 +1,6 @@
+schema: spec-driven
+created: 2026-08-27
+# Foundation/toolchain migration: this change replaces the runtime and CI
+# tree but authors no capability spec deltas. Retiring the Hearsay-era
+# specs is a separate spec change, not part of this proposal.
+skip_specs: true
