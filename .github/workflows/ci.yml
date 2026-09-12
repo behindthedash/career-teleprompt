@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   windows-quality:
-    name: Windows tests, typecheck, build & Rust check
+    name: Lint, Test & Build
     runs-on: windows-latest
 
     steps:

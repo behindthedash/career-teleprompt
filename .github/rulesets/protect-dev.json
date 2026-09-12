@@ -42,7 +42,7 @@
             "context": "openspec-validate"
           },
           {
-            "context": "Windows tests, typecheck, build & Rust check"
+            "context": "Lint, Test & Build"
           }
         ]
       }

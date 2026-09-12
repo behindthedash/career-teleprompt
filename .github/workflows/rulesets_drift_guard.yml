@@ -66,6 +66,11 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: python scripts/ci/rulesets/rulesets_sync.py --apply
 
-      - name: Note skipped run due to missing App credentials
+      # Fail, not notice: a silently-skipped guard let protect-dev/prd drift
+      # unnoticed from 2026-08-23 to 2026-09-12. Missing credentials mean the
+      # guard is not guarding, and a green run must never claim otherwise.
+      - name: Fail run due to missing App credentials
         if: ${{ always() && (env.RULESETS_APP_ID == '' || env.RULESETS_APP_PRIVATE_KEY == '') }}
-        run: echo "::notice::Rulesets drift guard skipped -- install the release-notes GitHub App and set vars.RELEASE_NOTES_APP_ID / secrets.RELEASE_NOTES_APP_PRIVATE_KEY to enable it."
+        run: |
+          echo "::error::Rulesets drift guard cannot run -- install the release-notes GitHub App and set vars.RELEASE_NOTES_APP_ID / secrets.RELEASE_NOTES_APP_PRIVATE_KEY."
+          exit 1
