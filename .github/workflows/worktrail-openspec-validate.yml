@@ -1,8 +1,11 @@
 name: "CI: OpenSpec validate"
+# No `paths:` filter: `openspec-validate` is a required status check in
+# .github/rulesets/protect-{dev,prd}.json, and a path-filtered required
+# workflow never reports on PRs outside its paths, leaving them stuck on an
+# "Expected" check forever. validate --all --strict is cheap enough to run on
+# every PR.
 on:
   pull_request:
-    paths:
-      - "openspec/**"
 
 jobs:
   openspec-validate:
