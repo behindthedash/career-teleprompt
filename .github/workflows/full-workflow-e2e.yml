@@ -62,7 +62,7 @@ jobs:
 
       - name: Upload workflow screenshots, report and trace
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: career-teleprompt-full-workflow-e2e
           path: artifacts/full-workflow-e2e
