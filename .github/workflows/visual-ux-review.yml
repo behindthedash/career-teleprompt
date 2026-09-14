@@ -61,7 +61,7 @@ jobs:
 
       - name: Upload screenshot and review artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: career-teleprompt-visual-review
           path: artifacts/visual-review/
