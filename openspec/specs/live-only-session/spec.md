@@ -1,3 +1,5 @@
+# live-only-session Specification
+
 ## Purpose
 
 Allows Hearsay to provide live transcription/events without saving a Hearsay transcript artifact.
@@ -11,7 +13,7 @@ A session SHALL be able to select live-only output independently of any downstre
 - **WHEN** a session is started with the live-only output policy and no transcript subscriber is registered
 - **THEN** capture, transcription, and the live display continue while no transcript file is created or finalized
 
-### Requirement: Persisted output remains the normal default
+### Requirement: Persisted output remains default
 When no live-only policy is selected, existing saved-transcript behavior SHALL remain the default.
 
 #### Scenario: Existing start-recording action is used
@@ -25,7 +27,7 @@ During an active session Hearsay SHALL make clear whether Hearsay transcript-fil
 - **WHEN** a session is running with transcript-file persistence disabled
 - **THEN** the session status shown to the user states that no transcript file is being saved
 
-### Requirement: Live-only does not mean delete-after-write
+### Requirement: Live-only sessions do not create Hearsay transcript files
 Hearsay SHALL avoid creating the transcript artifact in live-only mode rather than writing sensitive text and deleting it afterward. The runtime SHALL decide transcript persistence before writer construction.
 
 #### Scenario: Live-only session starts
