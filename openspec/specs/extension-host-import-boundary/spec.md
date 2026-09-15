@@ -25,7 +25,7 @@ Standard Hearsay packaging SHALL NOT bundle consumer-specific dependency sets me
 - **WHEN** a standard Hearsay build or dependency manifest is produced
 - **THEN** it contains no consumer-specific retrieval, vector, database, or LLM dependencies added on behalf of an external application
 
-### Requirement: Private internals are outside the supported contract
+### Requirement: Private application internals are not part of the supported contract
 External integrations SHALL be possible through documented public modules without reading private transcript queues, tkinter widgets, recorder internals, or Whisper pipeline internals.
 
 #### Scenario: Consumer subscribes correctly
