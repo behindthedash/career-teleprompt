@@ -1,3 +1,5 @@
+# transcript-events Specification
+
 ## Purpose
 
 Defines Hearsay's public finalized-transcript event and subscriber contract for downstream consumers.
