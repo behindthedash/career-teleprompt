@@ -19,7 +19,7 @@ are planning-artifact edits and must run outside the conductor fan-out.
       files: AGENTS.md
 - [ ] 1.6 [docs] Update `openspec/README.md` product boundary and roadmap (add epic 004, describe what is adopted from NexQ versus built as Career Teleprompt) and rewrite `openspec/config.yaml` context and rules so they describe the NexQ foundation and no longer forbid teleprompter/RAG/interview semantics (Requirement: Foundation baseline is pinned and documented).
       files: openspec/README.md, openspec/config.yaml
-- [ ] 1.7 [docs] Edit the `## Purpose` line of the canonical upstream-contribution-workflow spec to name NexQ as upstream; deltas cannot change Purpose (Requirement: Upstream sync is repeatable and non-destructive).
+- [ ] 1.7 [docs] Edit the `## Purpose` line of the canonical upstream-contribution-workflow spec to name NexQ as upstream; deltas cannot change Purpose (Requirement: NexQ upstream sync is repeatable and non-destructive; Requirement: NexQ upstream contributions exclude consumer/private material; Requirement: NexQ contribution rejection does not block local evolution).
       files: openspec/specs/upstream-contribution-workflow/spec.md
 
 ## 2. NexQ foundation import
