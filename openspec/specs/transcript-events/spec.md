@@ -48,7 +48,7 @@ Subscriber exceptions, stalls, or overload SHALL NOT stop audio capture, transcr
 - **THEN** the configured non-blocking overflow policy applies, a drop diagnostic is recorded, and transcription continues
 
 ### Requirement: Subscriber health is observable without transcript retention
-Hearsay SHALL expose delivery/drop/failure diagnostics sufficient to troubleshoot a subscriber without retaining transcript bodies as diagnostic history.
+Hearsay SHALL expose delivered/dropped/failure counts and last failure timing/status for each subscriber without retaining transcript bodies as diagnostic history.
 
 #### Scenario: Handler raises
 - **WHEN** a handler raises while processing an event
