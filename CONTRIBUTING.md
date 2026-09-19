@@ -74,7 +74,7 @@ Common scopes: `stt`, `llm`, `audio`, `overlay`, `launcher`, `rag`, `calllog`, `
 
 ## Code Style
 
-- Follow the conventions documented in [`CLAUDE.md`](./CLAUDE.md)
+- Follow the conventions documented in [`AGENTS.md`](./AGENTS.md)
 - **TypeScript**: camelCase, Zustand stores in `src/stores/`, hooks in `src/hooks/`
 - **Rust**: snake_case, commands in `src-tauri/src/commands/`
 - **Types**: All TypeScript types live in `src/lib/types.ts` — keep them in sync with Rust structs
