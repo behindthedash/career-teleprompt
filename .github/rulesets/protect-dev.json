@@ -43,6 +43,9 @@
           },
           {
             "context": "Lint, Test & Build"
+          },
+          {
+            "context": "gitleaks-pr-diff"
           }
         ]
       }
