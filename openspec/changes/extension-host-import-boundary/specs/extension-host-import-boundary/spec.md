@@ -7,7 +7,7 @@ The documented host package surface SHALL be importable without creating UI, ope
 - **WHEN** the downstream process imports only the documented public Hearsay extension modules
 - **THEN** the import succeeds with no application/audio/model startup side effects
 
-### Requirement: Private application internals are not part of the supported contract
+### Requirement: Private internals are outside the supported contract
 External integrations SHALL be possible through documented public modules without reading private transcript queues, tkinter widgets, recorder internals, or Whisper pipeline internals.
 
 #### Scenario: Consumer subscribes correctly
