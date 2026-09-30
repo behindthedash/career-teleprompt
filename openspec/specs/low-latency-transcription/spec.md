@@ -1,10 +1,12 @@
+# low-latency-transcription Specification
+
 ## Purpose
 
 Allows live consumers to receive finalized speech more frequently than ordinary batch transcription while preserving Hearsay's normal recording profile and making real-time lag visible.
 
 ## Requirements
 
-### Requirement: Transcription cadence is selectable per session
+### Requirement: Transcription window cadence is selectable per recording session
 Hearsay SHALL support the existing normal cadence and at least one shorter live cadence selected when a session starts. One session's choice SHALL NOT mutate defaults for another session. The recorder SHALL accept session-scoped chunk duration/overlap parameters while retaining existing defaults for normal sessions.
 
 #### Scenario: Live profile is selected
@@ -22,7 +24,7 @@ A live profile SHALL retain boundary overlap/dedup protection and flush eligible
 - **WHEN** a live session stops before the current shorter window has filled
 - **THEN** the eligible final partial speech is flushed to transcription rather than discarded
 
-### Requirement: Live lag/backpressure is observable
+### Requirement: Live transcription lag/backpressure is observable
 Hearsay SHALL measure enough processing/backlog state to determine when finalized windows are produced faster than they are transcribed and SHALL surface sustained lag as degraded state. The runtime SHALL record audio duration, transcription elapsed time/realtime factor, and queue/backlog depth sufficient to classify healthy versus behind state.
 
 #### Scenario: Processing falls behind realtime
