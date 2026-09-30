@@ -1,10 +1,12 @@
+# transcript-events Specification
+
 ## Purpose
 
 Defines Hearsay's public finalized-transcript event and subscriber contract for downstream consumers.
 
 ## Requirements
 
-### Requirement: Finalized speech is exposed as generic transcript events
+### Requirement: Finalized speech is exposed as transcript events
 Hearsay SHALL expose finalized transcribed speech as immutable transcript events, published only after source labeling, overlap deduplication, and echo suppression have completed. Each event SHALL identify session, source, text, ordering information, finality, and available timing information without downstream-domain metadata.
 
 #### Scenario: Finalized Remote speech is published
@@ -34,7 +36,7 @@ A healthy subscriber SHALL observe events in the same finalized order in which H
 - **THEN** a healthy subscriber receives the corresponding events in that same order with monotonically increasing ordering information
 
 ### Requirement: Recording sessions are isolated
-Each event SHALL belong to exactly one session identity, allocated uniquely per recording session. New sessions SHALL not inherit queued events or relabeled data from prior sessions, and delayed prior-session work SHALL NOT be relabeled as current-session events.
+The dispatcher SHALL allocate a unique session identity per recording session. Each event SHALL belong to exactly one session identity. New sessions SHALL not inherit queued events or relabeled data from prior sessions, and the dispatcher SHALL NOT relabel delayed prior-session events as current-session events.
 
 #### Scenario: Recording restarts
 - **WHEN** one session ends and another begins
