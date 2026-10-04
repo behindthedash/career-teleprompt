@@ -13,7 +13,6 @@ const FLUSH_INTERVAL_MS = 30_000; // 30 seconds
  */
 export function useTranscriptPersistence() {
   const activeMeeting = useMeetingStore((s) => s.activeMeeting);
-  const lastPersistedIndex = useMeetingStore((s) => s.lastPersistedIndex);
   const setLastPersistedIndex = useMeetingStore((s) => s.setLastPersistedIndex);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 

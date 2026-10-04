@@ -3,7 +3,6 @@ import { useStreamStore } from "../stores/streamStore";
 import { useAIActionsStore } from "../stores/aiActionsStore";
 import { generateAssist, cancelGeneration } from "../lib/ipc";
 import { showToast } from "../stores/toastStore";
-import type { IntelligenceMode } from "../lib/types";
 import {
   Loader2,
   Sparkles,
@@ -73,7 +72,7 @@ export function ModeButtons() {
     }
 
     // Add custom actions
-    for (const [key, cfg] of Object.entries(actions)) {
+    for (const cfg of Object.values(actions)) {
       if (!cfg.isBuiltIn && cfg.visible) {
         result.push({
           mode: cfg.mode,

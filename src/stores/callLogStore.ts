@@ -24,7 +24,7 @@ interface CallLogState {
   clearAll: () => void;
 }
 
-export const useCallLogStore = create<CallLogState>((set, get) => ({
+export const useCallLogStore = create<CallLogState>((set) => ({
   entries: [],
   isOpen: false,
   activeFilter: "all",

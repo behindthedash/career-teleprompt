@@ -44,7 +44,7 @@ const headers = {
 async function github(apiPath, options = {}) {
   const response = await fetch(`https://api.github.com${apiPath}`, {
     ...options,
-    headers: { ...headers, ...(options.headers ?? {}) },
+    headers: { ...headers, ...options.headers },
   });
   if (!response.ok) {
     const text = await response.text();

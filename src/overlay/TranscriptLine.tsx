@@ -50,7 +50,6 @@ export function TranscriptLine({ segment, searchQuery }: TranscriptLineProps) {
   const translations = useTranslationStore((s) => s.translations);
   const translating = useTranslationStore((s) => s.translating);
   const displayMode = useTranslationStore((s) => s.displayMode);
-  const autoTranslateActive = useTranslationStore((s) => s.autoTranslateActive);
 
   // SP2 Task 7: Bookmark state + context menu position
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);

@@ -193,10 +193,6 @@ export function TranslationSettings() {
   const setTargetLang = useTranslationStore((s) => s.setTargetLang);
   const sourceLang = useTranslationStore((s) => s.sourceLang);
   const setSourceLang = useTranslationStore((s) => s.setSourceLang);
-  const displayMode = useTranslationStore((s) => s.displayMode);
-  const setDisplayMode = useTranslationStore((s) => s.setDisplayMode);
-  const autoTranslateEnabled = useTranslationStore((s) => s.autoTranslateEnabled);
-  const setAutoTranslateEnabled = useTranslationStore((s) => s.setAutoTranslateEnabled);
   const selectionToolbarEnabled = useTranslationStore((s) => s.selectionToolbarEnabled);
   const setSelectionToolbarEnabled = useTranslationStore((s) => s.setSelectionToolbarEnabled);
   const cacheEnabled = useTranslationStore((s) => s.cacheEnabled);
@@ -211,7 +207,7 @@ export function TranslationSettings() {
   const [keyDirty, setKeyDirty] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
   const [statusMessage, setStatusMessage] = useState("");
-  const [responseMs, setResponseMs] = useState<number | null>(null);
+  const [, setResponseMs] = useState<number | null>(null);
   const [azureRegion, setAzureRegion] = useState("global");
   const [keyStatusMap, setKeyStatusMap] = useState<Record<string, boolean>>({});
   const [availableLanguages, setAvailableLanguages] = useState<TranslationLanguage[]>([]);

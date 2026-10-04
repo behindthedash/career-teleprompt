@@ -280,7 +280,6 @@ export function STTSettings() {
   const setMeetingAudioConfig = useConfigStore((s) => s.setMeetingAudioConfig);
   const sttLanguage = useConfigStore((s) => s.sttLanguage);
   const setSTTLanguage = useConfigStore((s) => s.setSTTLanguage);
-  const activeWhisperModel = useConfigStore((s) => s.activeWhisperModel);
   // Persisted: providers whose key has been saved + tested successfully
   const verifiedCloudProviders = useConfigStore((s) => s.verifiedCloudProviders);
   const setVerifiedCloudProviders = useConfigStore((s) => s.setVerifiedCloudProviders);
@@ -297,7 +296,7 @@ export function STTSettings() {
   const [statusMessage, setStatusMessage] = useState("");
 
   const [azureRegion, setAzureRegion] = useState("eastus");
-  const [hasStoredRegion, setHasStoredRegion] = useState(false);
+  const [, setHasStoredRegion] = useState(false);
 
   const [localEngines, setLocalEngines] = useState<LocalSTTEngineInfo[]>([]);
   const activeParakeetModel = useConfigStore((s) =>
@@ -368,10 +367,6 @@ export function STTSettings() {
     }
 
     return { text: "Ready", variant: "ready" };
-  }
-
-  function isProviderReady(p: ProviderOption): boolean {
-    return getBadgeState(p).variant === "ready";
   }
 
   // ── Key loading (load stored key display when switching providers) ──
@@ -562,7 +557,6 @@ export function STTSettings() {
                 key={p.value}
                 provider={p}
                 isSelected={selectedProvider === p.value}
-                isActive={sttProvider === p.value}
                 badge={getBadgeState(p)}
                 onClick={() => handleProviderChange(p.value)}
               />
@@ -585,7 +579,6 @@ export function STTSettings() {
                 key={p.value}
                 provider={p}
                 isSelected={selectedProvider === p.value}
-                isActive={sttProvider === p.value}
                 badge={getBadgeState(p)}
                 onClick={() => handleProviderChange(p.value)}
               />
@@ -811,13 +804,11 @@ export function STTSettings() {
 function ProviderCard({
   provider,
   isSelected,
-  isActive,
   badge,
   onClick,
 }: {
   provider: ProviderOption;
   isSelected: boolean;
-  isActive: boolean;
   badge: BadgeState;
   onClick: () => void;
 }) {

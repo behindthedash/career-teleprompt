@@ -9,7 +9,7 @@ interface TopicSectionState {
   clearSections: () => void;
 }
 
-export const useTopicSectionStore = create<TopicSectionState>((set, get) => ({
+export const useTopicSectionStore = create<TopicSectionState>((set) => ({
   sections: [],
 
   addSection: (section) => {

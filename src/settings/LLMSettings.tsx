@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useConfigStore } from "../stores/configStore";
 import { showToast } from "../stores/toastStore";
 import {
-  getLLMProviders,
   setLLMProvider,
   listModels,
   setActiveModel,

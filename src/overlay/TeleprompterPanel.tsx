@@ -71,11 +71,6 @@ export function TeleprompterPanel() {
     () => (document ? buildDisplaySections(document) : []),
     [document],
   );
-  const activeDisplaySection = displaySections[activeSectionIndex];
-  const readingPieceIndex = activeDisplaySection
-    ? findReadingPieceIndex(activeDisplaySection.pieces, cursorTokenIndex)
-    : -1;
-
   useEffect(() => {
     if (isEditing) return;
     const frame = window.requestAnimationFrame(() => {

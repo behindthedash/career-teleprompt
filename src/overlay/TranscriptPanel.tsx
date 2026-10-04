@@ -20,7 +20,6 @@ export function TranscriptPanel() {
   const setAutoScroll = useTranscriptStore((s) => s.setAutoScroll);
   const isRecording = useMeetingStore((s) => s.isRecording);
   const audioMode = useMeetingStore((s) => s.audioMode);
-  const meetingAudioConfig = useConfigStore((s) => s.meetingAudioConfig);
   const { micLevel, systemLevel } = useAudioLevel();
   const mutedYou = useConfigStore((s) => s.mutedYou);
   const mutedThem = useConfigStore((s) => s.mutedThem);
@@ -43,7 +42,6 @@ export function TranscriptPanel() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollAnimRef = useRef<number>(0);
   const isAnimatingRef = useRef(false);
-  const isSearchVisible = searchQuery.length > 0;
 
   // Momentum-based smooth scroll — exponential deceleration for a buttery feel
   const scrollToBottom = useCallback(() => {

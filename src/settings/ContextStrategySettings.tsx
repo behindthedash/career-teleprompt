@@ -330,14 +330,6 @@ function HelpPanel({ id }: { id: string }) {
   );
 }
 
-function SectionHelp({ id, activeId, onToggle }: { id: string; activeId: string | null; onToggle: (id: string | null) => void }) {
-  return (
-    <div className="flex items-center gap-2">
-      <HelpButton id={id} activeId={activeId} onToggle={onToggle} />
-    </div>
-  );
-}
-
 function RebuildBadge({ show }: { show: boolean }) {
   if (!show) return null;
   return (

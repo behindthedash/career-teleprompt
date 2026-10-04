@@ -94,7 +94,6 @@ export function LauncherView() {
   const contextStrategy = useConfigStore((s) => s.contextStrategy);
   const rememberedMeetingSetup = useConfigStore((s) => s.rememberedMeetingSetup);
   const indexStatus = useRagStore((s) => s.indexStatus);
-  const isIndexing = useRagStore((s) => s.isIndexing);
   const indexStale = useRagStore((s) => s.indexStale);
   const isAutoIndexing = useRagStore((s) => s.isAutoIndexing);
   const refreshIndexStatus = useRagStore((s) => s.refreshIndexStatus);
@@ -212,7 +211,7 @@ export function LauncherView() {
       await rebuildIndex();
       setRagStatus("done");
       setTimeout(() => setRagStatus("idle"), 3000);
-    } catch (e) {
+    } catch {
       setRagStatus("idle");
     }
   }, [rebuildIndex]);

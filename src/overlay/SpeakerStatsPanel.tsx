@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useSpeakerStore } from "../stores/speakerStore";
-import { BarChart3, Pencil, Check, X } from "lucide-react";
+import { BarChart3, Pencil } from "lucide-react";
 
 interface SpeakerStatsPanelProps {
   isOpen: boolean;

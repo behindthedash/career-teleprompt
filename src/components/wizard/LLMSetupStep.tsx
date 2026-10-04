@@ -10,7 +10,6 @@ import {
 import type { LLMProviderType, ModelInfo } from "../../lib/types";
 import {
   Server,
-  Cloud,
   CheckCircle,
   XCircle,
   Loader2,
@@ -71,7 +70,6 @@ export function LLMSetupStep({
   lmStudioRunning,
   lmStudioModels,
 }: LLMSetupStepProps) {
-  const llmProvider = useConfigStore((s) => s.llmProvider);
   const llmModel = useConfigStore((s) => s.llmModel);
   const setConfigProvider = useConfigStore((s) => s.setLLMProvider);
   const setConfigModel = useConfigStore((s) => s.setLLMModel);

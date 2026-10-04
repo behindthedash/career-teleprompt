@@ -9,7 +9,6 @@ import {
   Loader2,
   X,
   Zap,
-  HardDrive,
   Globe,
 } from "lucide-react";
 import { useModelDownload } from "../hooks/useModelDownload";

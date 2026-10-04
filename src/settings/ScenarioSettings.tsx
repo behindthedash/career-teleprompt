@@ -5,7 +5,6 @@ import { useScenarioStore } from "../stores/scenarioStore";
 import { BUILT_IN_SCENARIOS } from "../lib/scenarios";
 import type { AIScenario, ScenarioTemplate } from "../lib/types";
 import {
-  ChevronDown,
   ChevronRight,
   RotateCcw,
   Plus,
