@@ -18,7 +18,6 @@ import {
   Pencil,
   Trash2,
   Check,
-  Download,
   Copy,
 } from "lucide-react";
 

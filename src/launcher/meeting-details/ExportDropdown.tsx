@@ -127,7 +127,7 @@ export function ExportDropdown({ meeting }: ExportDropdownProps) {
             </p>
           </div>
 
-          {allOptions.map((opt, i) => {
+          {allOptions.map((opt) => {
             const key = opt.label;
             const isScenario = opt.variant === "scenario";
             const separator = isScenario && allOptions.length > 1;

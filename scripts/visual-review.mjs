@@ -225,7 +225,7 @@ try {
       });
     }
 
-    for (const message of [...new Set(pageErrors)]) {
+    for (const message of new Set(pageErrors)) {
       addFinding({
         screen: screen.id,
         screenTitle: screen.title,

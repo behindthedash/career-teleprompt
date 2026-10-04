@@ -259,7 +259,7 @@ export function sequenceScore(spokenTokens: string[], expectedTokens: string[]):
 
   const rows = spokenTokens.length + 1;
   const columns = expectedTokens.length + 1;
-  const dp = Array.from({ length: rows }, () => new Array<number>(columns).fill(0));
+  const dp = Array.from({ length: rows }, () => Array.from({ length: columns }, () => 0));
 
   for (let i = 1; i < rows; i += 1) {
     for (let j = 1; j < columns; j += 1) {

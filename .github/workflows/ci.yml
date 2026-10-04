@@ -34,7 +34,7 @@ jobs:
         run: npm ci
 
       - name: OXLint
-        run: npx oxlint .
+        run: npx oxlint . --deny-warnings
 
       - name: Unit tests
         run: npm test

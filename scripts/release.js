@@ -55,7 +55,7 @@ const lines = commits.split("\n").filter(Boolean);
 let bump = "patch"; // default
 
 for (const line of lines) {
-  if (line.includes("BREAKING CHANGE") || /^feat!/.test(line) || /^fix!/.test(line)) {
+  if (line.includes("BREAKING CHANGE") || line.startsWith("feat!") || line.startsWith("fix!")) {
     bump = "major";
     break;
   }
